@@ -71,8 +71,7 @@ dict_mapillary_bdd = {
     "Truck": "truck"
 }
 dataset_rootpath = '/home/SharedFolder/CurrentDatasets/mapillary-vistas-dataset_public_v1.1'
-#dataset_subpaths = ['validation', 'testing', 'training']
-dataset_subpaths = ['training']
+dataset_subpaths = ['validation', 'testing', 'training']
 dataset_colcodes = 'config.json'
 
 ########################################################################################################################
