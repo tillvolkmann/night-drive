@@ -62,7 +62,7 @@ class BDDWeatherDataset(Dataset):
             data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train.json"))
             # concat path, since different for training and val set
             data["name"] = self.root_dir + "/images/100k/train/" + data["name"].astype(str)
-        elif split == "bddval":
+        elif split == "bddvalid":
             print(">> Using original BDD validation set")
             # validation set
             data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val.json"))
@@ -85,7 +85,7 @@ class BDDWeatherDataset(Dataset):
         data = data.drop(columns = ["labels", "timestamp", "attributes"])
         # drop samples with unwanted classes
         data = data.loc[~data.weather.isin(dropcls)]
-        data = data.sample(frac = 1).reset_index(drop = True)
+        data = data.sample(frac = 1, random_state = 123).reset_index(drop = True)
         # balance classes to fixed number
         if force_num is not None:
             data_balanced = pd.DataFrame()
