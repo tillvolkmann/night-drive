@@ -56,29 +56,79 @@ class BDDWeatherDataset(Dataset):
 
     """ Read Berkeley Deep Drive label json. """
     def _load_data(self, split, dropcls, force_num):
-        if split == "bddtrain":
+        if split == "bddtrain_original":
             print(">> Using original BDD training set")
             # training set
             data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train.json"))
-            # concat path, since different for training and val set
+            # concat paths to images, since different for training and val set
             data["name"] = self.root_dir + "/images/100k/train/" + data["name"].astype(str)
-        elif split == "bddvalid":
+        elif split == "bddvalid_original":
             print(">> Using original BDD validation set")
             # validation set
             data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val.json"))
-            # concat path, since different for training and val set
+            # concat paths to images, since different for training and val set
             data["name"] = self.root_dir + "/images/100k/val/" + data["name"].astype(str)
         else:
             print(">> Mixing original BDD training and validation sets")
             # training set
             data_train = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train.json"))
-            # concat path, since different for training and val set
+            # concat paths to images, since different for training and val set
             data_train["name"] = self.root_dir + "/images/100k/train/" + data_train["name"].astype(str)
             # validation set
             data_val = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val.json"))
-            # concat path, since different for training and val set
+            # concat paths to images, since different for training and val set
             data_val["name"] = self.root_dir + "/images/100k/val/" + data_val["name"].astype(str)
-            data = pd.concat([data_train, data_val], axis = 0)
+            # merge tran and val sets
+            data = pd.concat([data_train, data_val], axis=0)
+
+            if split != "bddvalid_original":
+                # Set of outputs for final project data sets
+                print(">> Returning final BDD training, dev-train, val and test sets")
+                # Settings for random sampling into the different sets
+                # Sizes of each set
+                n_total     = self._len_()
+                class_names = ['day','dawn','night']
+                sampler_dict = {
+                    'bddtrain_A'   : {'n':  None, 'class_dist': {'day': 1,    'dawn': 0, 'night': 0}},
+                    'bddtrain_B'   : {'n':  None, 'class_dist': {'day': 2./3, 'dawn': 1, 'night': 1./3}},
+                    'bddtrain_dev' : {'n': 2.5e3, 'class_dist': None},
+                    'bddtest'      : {'n': 2.5e3, 'class_dist': {'day': 1./3, 'dawn': 1./3, 'night': 1./3}},
+                    'bddval'       : {'n': 2.5e3, 'class_dist': {'day': 1./3, 'dawn': 1./3, 'night': 1./3}},
+                }
+                # disregard data with unknown weather conditions
+
+                ### train-dev needs be implemented
+                ### alterantively, could have written a func that instantiates a seed or a unique random number generator,
+                ### which could be queried consisntenly by range
+
+                # add a column to the dataframe indicating split association
+                data['split'] = pd.Series(np.array('unknown').repeat(n_total))
+                # shuffle data and reset index
+                data.apply(np.random.shuffle, axis=0)
+                data.reset_index()
+                # stratified random sample indices for val and test sets from the whole data set without replacement according to the desired daytime class distribution and sample size
+                for c in class_names:
+                    n_class_val = sampler_dict['bddval']['n'] * sampler_dict['bddval']['class_dist'][c]
+                    data['split'].loc[data.loc[data['DAYTIME'] == c].sample(n_class_val, random_state=123, replace=False).index] = 'bddval'
+                    n_class_test = sampler_dict['bddtest']['n'] * sampler_dict['bddtest']['class_dist'][c]
+                    data['split'].loc[data.loc[(data['DAYTIME'] == c) & (data['split'] != 'val')].sample(n_class_test, random_state=123, replace= alse).index  ] = 'bddtest'
+
+                # count the number of remaining 'day' records, as these define the max size of the train set
+                n_day_rem = data.loc[data['DAYTIME'] == 'day', data['split'] == 'unknown'].sum()
+                n_day_train = n_day_rem - sampler_dict['bddtrain_dev']['n']
+                # choose train+dev set as a random subset off the train set
+                if 'train' in split:
+                    for c in class_names:
+                        n_class_val = n_day_train * sampler_dict['class_dist'][c]
+                        data['split'].loc[data.loc[(data['DAYTIME'] == c) & (data['split'] == 'unknown')].sample(n_class_val, random_state=123, replace=False).index  ] = split
+                    # choose train+dev set as a random subset off the train set
+                    if split == 'bddtrain_dev':
+                        for c in class_names:
+                            n_class_val = sampler_dict['bddtrain_dev']['n'] * sampler_dict['class_dist'][c]
+                            data['split'].loc[data.loc[(data['DAYTIME'] == c) & (data['split'] == 'unknown')].sample(n_class_val, random_state=123, replace=False).index  ] = split
+                # in any case, we ready to query based on split now
+                data = data.query('split' == split)
+
         # drop other attributes
         data["weather"] = data.attributes.apply(lambda x: x["weather"])
         # drop other columns
