@@ -6,9 +6,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
-import datasets.bdd.BDDWeatherDataset as bdd
+import datasets.bdd.NightDriveDataset as bdd
 import sklearn.metrics as metrics
 #from tensorboardX import SummaryWriter
+
 
 def evaluate_f1_score(net, data_loader, num_batches = None):
     # f1 score: https://scikit-learn.org/stable/modules/model_evaluation.html#from-binary-to-multiclass-and-multilabel
@@ -28,6 +29,7 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
     net.train()
     return f1_score
 
+
 if __name__ == '__main__':
 
     # seeds
@@ -44,33 +46,44 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # setting data set root dir
-    root_dir = "/home/SharedFolder/CurrentDatasets/bdd100k"
+    root_dir = "/home/till/data/driving/BerkeleyDeepDrive/bdd100k"  # "/home/SharedFolder/CurrentDatasets/bdd100k"
 
     # show validation loss
     calc_valid_loss = True
 
     # data transforms
+    t_target_size = (224, 224)
+    t_norm_mean = [0.485, 0.456, 0.406]
+    t_norm_std = [0.229, 0.224, 0.225]
     transform = {
         "train": transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize(t_target_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])]), # ImageNet
+            transforms.Normalize(mean=t_norm_mean, std=t_norm_std)]),  # ImageNet
         "valid": transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize(t_target_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])  # ImageNet
+            transforms.Normalize(mean=t_norm_mean, std=t_norm_std)])  # ImageNet
     }
 
     # create data sets
-    ds_train = bdd.BDDWeatherDataset(root_dir, split = "bddtrain", transform = transform["train"], force_num = 4)
-    ds_valid = bdd.BDDWeatherDataset(root_dir, split = "bddvalid", transform = transform["valid"])
+    ds_database = 'bdd_all'
+    ds_train = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="train", transform=transform["train"])  # , force_num=4
+    ds_train_dev = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="train_dev", transform=transform["train"])
+    ds_valid = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="valid", transform=transform["valid"])
+    ds_test = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="test", transform=transform["valid"])
 
     # data loader
-    dl_train = torch.utils.data.DataLoader(ds_train, batch_size = 28, shuffle = True, num_workers = 8)
-    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = 28, shuffle = True, num_workers = 8)
+    dl_batch_size = 28
+    dl_num_workers = 8
+    dl_shuffle = True
+    dl_train = torch.utils.data.DataLoader(ds_train, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
+    dl_train_dev = torch.utils.data.DataLoader(ds_train_dev, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
+    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
+    dl_test = torch.utils.data.DataLoader(ds_test, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
 
     # create model
-    net = models.resnet50(pretrained = True)
+    net = models.resnet50(pretrained=True)
     net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
 
     # send model to device
