@@ -8,16 +8,21 @@ from torch.utils.data import Dataset
 
 class NightDriveDataset(Dataset):
 
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None, dropcls_dict=None, force_num=None):
+    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None, dropclass_dict=None, mergeclass_dict=None, force_num=None):
         """ Constructor """
         self.root_dir = root_dir
         self.transform = transform
         self.augment = augment
         self.data = self._load_data(database)
-        if dropcls_dict is not None:
-            self.data = self._drop_classes(dropcls_dict)
+        dropclass_dict = {'weather': ['undefined', 'foggy'], 'timeofday': ['undefined', 'dawn/dusk']}
+        mergeclass_dict = {'weather': {'cloudy': ['overcast', 'partly cloudy']}}
+        if dropclass_dict is not None:
+            self.data = self._drop_classes(dropclass_dict)
+        if mergeclass_dict is not None:
+            self.data = self._merge_classes(mergeclass_dict)
         if split is not None:
             self.data = self._split_data(split)
+        # deprecated:
         if force_num is not None:
             self.data_balanced = self._balance_classes(force_num)
 
@@ -74,51 +79,160 @@ class NightDriveDataset(Dataset):
         # return full data
         return data
 
-    def _drop_classes(self, dropcls_dict):
+    def _drop_classes(self, dropclass_dict):
         """Drop classes"""
         # drop samples with unwanted classes
-        dropcls_dict = {'weather': ['undefined'], 'timeofday': ['undefined', 'dawn/dusk']}
-        for k, v in dropcls_dict.items():
+        for k, v in dropclass_dict.items():
             if k in self.data.columns:
                 self.data = self.data.loc[~self.data[k].isin(v)]
         return self.data.reset_index(drop=True)
 
+    def _merge_classes(self, mergeclass_dict):
+        """Merge classes"""
+        # merge classes
+        for kk, vv in mergeclass_dict.items():  # for each variable key kk
+            if kk in self.data.columns:
+                for k, v in vv.items():  # for each subdict of 'newclass': [list of old classes]
+                    self.data[kk].replace(v, k, inplace=True)
+        return self.data.reset_index(drop=True)
+
     def _split_data(self, split):
-        # Set of outputs for final project data sets
-        print(">> Returning", split, "set.")
-        # Settings for random sampling into the different sets
-        n_total = self.data.shape[0]  # total size of data set
-        # dictionary specifying target size (n) and class distribution (class_dist) for split
+
         sampler_dict = {
-            'train'     : {'n': 20000, 'class_dist': {'daytime': 1.,   'dawn/dusk': 0.,     'night': 0.}},
-            'train_dev' : {'n': 2.5e3, 'class_dist': {'daytime': 1.,   'dawn/dusk': 0.,     'night': 0.}},
-            'test'      : {'n': 2.5e3, 'class_dist': {'daytime': 1./2, 'dawn/dusk': 0.,   'night': 1./2}},
-            'valid'     : {'n': 2.5e3, 'class_dist': {'daytime': 1./2, 'dawn/dusk': 0.,   'night': 1./2}},
+            'train': {'n': 40000, 'class_dist': {'daytime': 1., 'dawn/dusk': 0., 'night': 0.}, 'balancing': 'over', 'class_min': None},
+            'train_dev': {'n': 2.0e3, 'class_dist': {'daytime': 1., 'dawn/dusk': 0., 'night': 0.}, 'balancing': 'over',  'class_min': None},
+            'test': {'n': 2.0e3, 'class_dist': {'daytime': 1. / 2, 'dawn/dusk': 0., 'night': 1. / 2}, 'balancing': 'none', 'class_min': 50},
+            'valid': {'n': 2.0e3, 'class_dist': {'daytime': 1. / 2, 'dawn/dusk': 0., 'night': 1. / 2}, 'balancing': 'none', 'class_min': 50},
         }
-        # create column indicating split of database into train, train-dev, dev, and test set
-        # add a column to the dataframe indicating split association, initialize with all 'unassigned'
-        self.data['split'] = 'unassigned'
+
+        # cross-tabulation of available samples in space time x weather
+        cross_total = pd.crosstab(self.data['timeofday'], self.data['weather'])
+        cross_total = cross_total.reindex(sorted(cross_total.columns), axis=1)  # columns need to be in same order as sampler_table
+
+        # Get some helpers
+        _splits = ['test', 'valid', 'train_dev', 'train']  # sampler_dict.keys()
+        _timeofday_classes = self.data.timeofday.unique()
+        _weather_classes = np.sort(self.data.weather.unique())
+        _num_weather_classes = len(_weather_classes)
+        _num_timeofday_classes = len(_weather_classes)
+        _dist_weather_classes = cross_total.div(cross_total.sum(axis=1), axis=0)
+
+        # Initialize empty sampler table
+        iterables = [_splits, _timeofday_classes]
+        index = pd.MultiIndex.from_product(iterables, names=['split', 'timeofday'])
+        sampler_table = pd.DataFrame(np.zeros([8, len(_weather_classes)]), index=index, columns=_weather_classes)
+        sampler_table = sampler_table.reindex(sorted(sampler_table.columns), axis=1)
+        over_table = sampler_table.copy()
+
+        # First, we need to process all ocurrences of min_thr
+        for s in _splits:
+            if sampler_dict[s]['class_min'] is not None:
+                sampler_table.loc[s] = sampler_dict[s]['class_min']
+        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
+        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
+
+        # Second, case 'none' i.e. no balancing; note this case has priority over under and over
+        for s in _splits:
+            if sampler_dict[s]['balancing'] == 'none':
+                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+                    if f > 0.0:  # note this will intentionally exclude dusk/dawn
+                        _wanted = sampler_dict[s]['n'] * f * _dist_weather_classes.loc[t]
+                        # correct for min_thr
+                        _ = _wanted - sampler_table.loc[s, t]
+                        __ = (sum(_wanted) + _.where(_ < 0).fillna(0).sum()) / sum(_wanted)
+                        _wanted = _wanted * __
+                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t], _wanted)  # maximum on min_thr and balanced
+        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
+        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
+
+        # Third, we need to process all cases of undersampling ('under'); note this case has priority over 'over'
+        for s in _splits:
+            if sampler_dict[s]['balancing'] == 'under':
+                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+                    if f > 0.0:  # note this will intentionally exclude dusk/dawn
+                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t],
+                                                             sampler_dict[s]['n'] * f * np.ones(
+                                                                 _num_weather_classes) / _num_weather_classes)  # maximum on min_thr and balanced
+        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
+        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
+
+        # Fourth, we can process the cases of oversampling
+        # We oversample across all splits that want oversampling in proportion to their n
+        # Therefore, we need to know the
+        n_total_over = sum(list({sampler_dict[k]['n'] for k in sampler_dict if sampler_dict[k]['balancing'] == 'over'}))
+        for s in _splits:
+            if sampler_dict[s]['balancing'] == 'over':
+                f_total_over = sampler_dict[s][ 'n'] / n_total_over  # fraction of total remaing samples per class going into this split
+                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+                    if f > 0.0:
+                        # get max number of remaining samples available (for each weather condition)
+                        _avail = cross_avail.loc[t]  # ! plus those that this split aleady has from min_thr, if any
+                        # get the assigned fraction of them for this split
+                        _assigned = _avail * f_total_over
+                        _wanted = sampler_dict[s]['n'] * f * np.ones(_num_weather_classes) / _num_weather_classes
+                        _given = np.minimum(_assigned, _wanted)
+                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t], _given)  # maximum on min_thr and balanced
+                        # store number of samples to be oversampled per class
+                        over_table.loc[s, t] = _wanted - sampler_table.loc[s, t]
+        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
+        print(cross_avail.astype('int32'))
+        print(sampler_table.astype('int32'))
+        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
+
+        # cast to int
+        sampler_table = sampler_table.astype('int32')
+        over_table = over_table.astype('int32')
+
+        # print some summary stats
+        sampler_table_show = sampler_table.copy()
+        sampler_table_show['total'] = sampler_table_show.sum(axis=1)
+        print('\nMulti-variate distribution of unique original samples for each split:\n')
+        print(sampler_table_show.reindex(sorted(sampler_table_show.index), axis=0))
+        sampler_table_show = sampler_table_show.groupby(level='split').sum()
+        print('\nUnique sample distribution grouped by split:\n')
+        print(sampler_table_show.reindex(sorted(sampler_table_show.index), axis=0))
+        print('\nUnique samples not used:\n')
+        print(cross_avail.reindex(sorted(cross_avail.index), axis=0).astype('int32'))
+        print('\nMulti-variate distribution of oversampling samples across splits:\n')
+        over_table_show = over_table.copy()
+        over_table_show['total'] = over_table_show.sum(axis=1)
+        print(over_table_show.reindex(sorted(over_table_show.index), axis=0))
+
+        # add a column to the dataframe indicating split association (train, train-dev, dev, and test set)
+        self.data['split'] = 'unassigned'  # initialize with all 'unassigned'
         # shuffle data and reset index
         self.data = self.data.sample(frac=1.0, random_state=123).reset_index(drop=True)
-        # stratified random sampling of indices for val set
+
+        # stratified random sampling of indices for split sets based on sampler_table; note that sequential processing
+        # split sets up to the selected split is necessary to obtain reproducible results
         np.random.seed(123)
-        for sp in sampler_dict.keys():  # for each subset
-            for cl, fr in sampler_dict[sp]['class_dist'].items():  # for each class
-                n_samples = int(sampler_dict[sp]['n'] * fr)
-                if n_samples == 0:
-                    continue  # efficient, but also necessary to avoid empty input to np_random_choice
-                class_bool = self.data.timeofday.eq(cl) & self.data.split.eq('unassigned')
-                if n_samples <= sum(class_bool):
-                    idx = np.random.choice(self.data.index[class_bool], size=n_samples, replace=False)
+        data_out = pd.DataFrame()
+        for sp in _splits:   # sampler_table.index.get_level_values(level='split').unique():  # for each split set; note order matters here if reproducibility is needed, i.e. val and test need to go first
+            for td in sampler_table.index.get_level_values(level='timeofday').unique():  # for each timeofday
+                for we in sampler_table.columns:  # for each weather condition
+                    n_samples = sampler_table.loc[(sp,td), we]
+                    class_bool = self.data.split.eq('unassigned') & self.data.timeofday.eq(td) & self.data.weather.eq(we)
+                    n_samples <= sum(class_bool)
+                    assert n_samples <= sum(class_bool), \
+                        "Insufficient records ({}) available for target size ({}): split='{}', timeofday='{}', weather={}" \
+                            .format(sum(class_bool), n_samples, sp, td, we)
+                    idx = np.random.choice(self.data.index[class_bool].values, size=n_samples, replace=False)
                     self.data.loc[idx, 'split'] = sp
-                else:
-                    raise Exception('Insufficient records available for target sample size of split')
+                    # we can terminate this process as soon as we are done with the requested class
+                    if sp == split:
+                        # query split set based on split column
+                        n_over = over_table.loc[(sp, td), we]
+                        if n_over > 0:
+                            idx = np.hstack((idx, np.random.choice(idx, size=n_over, replace=True)))
+                        data_out = pd.concat([data_out, self.data.loc[idx]], axis=0)
+            # we can terminate the assignment process as soon as we are done with the requested split
+            if sp == split:
+                return data_out.sample(frac=1.0, replace=False, random_state=123).reset_index(drop=True)
+        # in case no split was requested, we return the orignial data with the added column indicating split assignment
+        return self.data.sample(frac=1.0, replace=False, random_state=123).reset_index(drop=True)
 
-        # query based on split column
-        return self.data.query('split == @split', inplace=False).reset_index(drop=True)
-
-    # balance classes to fixed number
     def _balance_classes(self, force_num):
+        # balance classes to fixed number
         if force_num is not None:
             data_balanced = pd.DataFrame()
             for weather, count in self.data.loc[:, "weather"].value_counts().to_dict().items():
