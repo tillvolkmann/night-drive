@@ -11,6 +11,20 @@ import sklearn.metrics as metrics
 #from tensorboardX import SummaryWriter
 
 
+def get_config(filename):
+    """
+    Loads config file for classifier and detector training.
+    Available files:
+        ~ 'config_bdd_setA.json' : 100% day, 0% night
+        ~ 'config_bdd_setB.json' : 75% day, 25% night
+        ~ 'config_bdd_setC.json' : 50% day, 50% night
+    """
+    import json
+    with open(filename, 'r') as f:
+        config = json.load(f)
+    return config
+
+
 def evaluate_f1_score(net, data_loader, num_batches = None):
     # f1 score: https://scikit-learn.org/stable/modules/model_evaluation.html#from-binary-to-multiclass-and-multilabel
     net.eval() # disables dropout, etc.
@@ -32,6 +46,10 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
 
 if __name__ == '__main__':
 
+    # get config
+    config_file = 'config_bdd_setA.json'
+    cfg = get_config(config_file)  # see docstring for info on available config files
+
     # seeds
     torch.manual_seed(123)
     np.random.seed(123)
@@ -44,9 +62,6 @@ if __name__ == '__main__':
 
     # setting device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    # setting data set root dir
-    root_dir = "/home/till/data/driving/BerkeleyDeepDrive/bdd100k"  # "/home/SharedFolder/CurrentDatasets/bdd100k"
 
     # show validation loss
     calc_valid_loss = True
@@ -67,11 +82,15 @@ if __name__ == '__main__':
     }
 
     # create data sets
-    ds_database = 'bdd_all'
-    ds_train = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="train", transform=transform["train"])  # , force_num=4
-    ds_train_dev = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="train_dev", transform=transform["train"])
-    ds_valid = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="valid", transform=transform["valid"])
-    ds_test = bdd.WeatherClassifierDataset(root_dir, database=ds_database, split="test", transform=transform["valid"])
+    ds_train = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="train", transform=transform["train"],
+        sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict, mergeclass_dict=cfg.mergeclass_dict)
+    ds_train_dev = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="train_dev", transform=transform["train"],
+        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
+    ds_valid = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="valid", transform=transform["valid"],
+        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
+    ds_test = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="test", transform=transform["valid"],
+        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
+
 
     # data loader
     dl_batch_size = 28

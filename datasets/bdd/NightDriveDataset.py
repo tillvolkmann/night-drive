@@ -2,29 +2,24 @@ import os
 import numpy as np
 import pandas as pd
 from PIL import Image
-from pandas import DataFrame
 from torch.utils.data import Dataset
 
 
 class NightDriveDataset(Dataset):
 
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None, dropclass_dict=None, mergeclass_dict=None, force_num=None):
+    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
+                 sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
         """ Constructor """
         self.root_dir = root_dir
         self.transform = transform
         self.augment = augment
         self.data = self._load_data(database)
-        dropclass_dict = {'weather': ['undefined', 'foggy'], 'timeofday': ['undefined', 'dawn/dusk']}
-        mergeclass_dict = {'weather': {'cloudy': ['overcast', 'partly cloudy']}}
         if dropclass_dict is not None:
             self.data = self._drop_classes(dropclass_dict)
         if mergeclass_dict is not None:
             self.data = self._merge_classes(mergeclass_dict)
         if split is not None:
             self.data = self._split_data(split)
-        # deprecated:
-        if force_num is not None:
-            self.data_balanced = self._balance_classes(force_num)
 
     def __len__(self):
         """Provides the size of the dataset."""
@@ -97,13 +92,6 @@ class NightDriveDataset(Dataset):
         return self.data.reset_index(drop=True)
 
     def _split_data(self, split):
-
-        sampler_dict = {
-            'train': {'n': 40000, 'class_dist': {'daytime': 1., 'dawn/dusk': 0., 'night': 0.}, 'balancing': 'over', 'class_min': None},
-            'train_dev': {'n': 2.0e3, 'class_dist': {'daytime': 1., 'dawn/dusk': 0., 'night': 0.}, 'balancing': 'over',  'class_min': None},
-            'test': {'n': 2.0e3, 'class_dist': {'daytime': 1. / 2, 'dawn/dusk': 0., 'night': 1. / 2}, 'balancing': 'none', 'class_min': 50},
-            'valid': {'n': 2.0e3, 'class_dist': {'daytime': 1. / 2, 'dawn/dusk': 0., 'night': 1. / 2}, 'balancing': 'none', 'class_min': 50},
-        }
 
         # cross-tabulation of available samples in space time x weather
         cross_total = pd.crosstab(self.data['timeofday'], self.data['weather'])
@@ -197,6 +185,11 @@ class NightDriveDataset(Dataset):
         over_table_show = over_table.copy()
         over_table_show['total'] = over_table_show.sum(axis=1)
         print(over_table_show.reindex(sorted(over_table_show.index), axis=0))
+        #
+        print('\nCross tabulation of original samples timeofday x weather:\n')
+        cross_total_show = cross_total.copy()
+        cross_total_show['total'] = cross_total_show.sum(axis=1)
+        print(cross_total_show)
 
         # add a column to the dataframe indicating split association (train, train-dev, dev, and test set)
         self.data['split'] = 'unassigned'  # initialize with all 'unassigned'
@@ -231,29 +224,15 @@ class NightDriveDataset(Dataset):
         # in case no split was requested, we return the orignial data with the added column indicating split assignment
         return self.data.sample(frac=1.0, replace=False, random_state=123).reset_index(drop=True)
 
-    def _balance_classes(self, force_num):
-        # balance classes to fixed number
-        if force_num is not None:
-            data_balanced = pd.DataFrame()
-            for weather, count in self.data.loc[:, "weather"].value_counts().to_dict().items():
-                if force_num >= count:
-                    orig = self.data.loc[self.data.weather == weather]
-                    # sample with replacement
-                    over = orig.iloc[np.random.randint(0, orig.shape[0], size = force_num - orig.shape[0])]
-                    data_balanced = pd.concat([data_balanced, orig, over], axis = 0)
-                else:
-                    orig = self.data.loc[self.data.weather == weather].iloc[0:force_num]
-                    data_balanced = pd.concat([data_balanced, orig], axis = 0)
-        return data_balanced
-
 
 class WeatherClassifierDataset(NightDriveDataset):
     """"DataSet sub-class for Weatehr classifier in project Night-Dirve."""
     # Why does this not work???
     #     def __init__(self, *args):
     #     super().__init__(*args)
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None, dropcls=[None], force_num=None):
-        super().__init__(root_dir, database, split, transform, augment, dropcls, force_num)
+    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
+                                    sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
+        super().__init__(root_dir, database, split, transform, augment, sampler_dict, dropclass_dict, mergeclass_dict)
         self.data = self._tidy_data()
         self.class_dict = dict(zip(
             list(np.sort(self.data.weather.unique())),
@@ -290,8 +269,9 @@ class WeatherClassifierDataset(NightDriveDataset):
 
 class DetectorDataset(NightDriveDataset):
     """"DataSet sub-class for Detector application in project Night-Dirve."""
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None, dropcls=[None], force_num=None):
-        super().__init__(root_dir, database, split, transform, augment, dropcls, force_num)
+    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
+                                sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
+        super().__init__(root_dir, database, split, transform, augment, sampler_dict, dropclass_dict, mergeclass_dict)
         self.data = self._tidy_data()
 
     def __getitem__(self, ix):
@@ -339,9 +319,26 @@ if __name__ == '__main__':
     """Main implements testing."""
     from pandas.testing import assert_frame_equal
 
-    # Set root dir
-    root_dir = "/home/till/data/driving/BerkeleyDeepDrive/bdd100k"  # "/home/SharedFolder/CurrentDatasets/bdd100k"
-    ds_database = 'bdd_all'
+
+    def get_config(filename):
+        """
+        Loads config file for classifier and detector training.
+        Available files:
+            ~ 'config_bdd_setA.json' : 100% day, 0% night
+            ~ 'config_bdd_setB.json' : 75% day, 25% night
+            ~ 'config_bdd_setC.json' : 50% day, 50% night
+        """
+        import json
+        with open(filename, 'r') as f:
+            config = json.load(f)
+        return config
+
+
+    # get config
+    config_file = 'config_bdd_setA.json'
+    cfg = get_config(config_file)  # see docstring for info on available config files
+
+    # Spec splits to load
     splits = ["train", "train_dev", "valid", "test"]
 
     print('>>> ===========================================')

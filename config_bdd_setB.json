@@ -1,0 +1,12 @@
+{
+    "root_dir": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k",
+    "database": "bdd_all",
+    "dropclass_dict": {"weather": ["undefined", "foggy"], "timeofday": ["undefined", "dawn/dusk"]},
+    "mergeclass_dict": {"weather": {"cloudy": ["overcast", "partly cloudy"]}},
+    "sampler_dict": {
+        "train": {"n": 40000, "class_dist": {"daytime": 0.75, "dawn/dusk": 0, "night": 0.25}, "balancing": "over", "class_min": 0},
+        "train_dev": {"n": 2000, "class_dist": {"daytime": 0.75, "dawn/dusk": 0, "night": 0.25}, "balancing": "over",  "class_min": 0},
+        "test": {"n": 2000, "class_dist": {"daytime": 0.5, "dawn/dusk": 0, "night": 0.5}, "balancing": "none", "class_min": 50},
+        "valid": {"n": 2000, "class_dist": {"daytime": 0.5, "dawn/dusk": 0, "night": 0.5}, "balancing": "none", "class_min": 50}
+    }
+}
