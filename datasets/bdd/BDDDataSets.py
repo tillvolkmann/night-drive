@@ -7,17 +7,16 @@ from torch.utils.data import Dataset
 
 class NightDriveDataset(Dataset):
 
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
-                 sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
+    def __init__(self, config, split=None, transform=None, augment=None):
         """ Constructor """
-        self.root_dir = root_dir
+        self.config = config
         self.transform = transform
         self.augment = augment
-        self.data = self._load_data(database)
-        if dropclass_dict is not None:
-            self.data = self._drop_classes(dropclass_dict)
-        if mergeclass_dict is not None:
-            self.data = self._merge_classes(mergeclass_dict)
+        self.data = self._load_data()
+        if self.config.dropclass_dict is not None:
+            self.data = self._drop_classes()
+        if self.config.mergeclass_dict is not None:
+            self.data = self._merge_classes()
         if split is not None:
             self.data = self._split_data(split)
 
@@ -43,23 +42,23 @@ class NightDriveDataset(Dataset):
         img = Image.open(img_path)
         return img
 
-    """Read Berkeley Deep Drive label json."""
-    def _load_data(self, database):
+    def _load_data(self):
+        """Read Berkeley Deep Drive label json."""
         # Load databases
         data = pd.DataFrame()
-        if database in ['bdd_train', 'bdd_all', 'all']:
+        if self.config.database in ['bdd_train', 'bdd_all', 'all']:
             print(">> Loading BDD training label dataset")
             # training set
-            data_new = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train.json"))
+            data_new = pd.read_json(os.path.join(self.config.root_dir, "labels/bdd100k_labels_images_train.json"))
             # concat paths to images, since different for training and val set
-            data_new["name"] = self.root_dir + "/images/100k/train/" + data_new["name"].astype(str)
+            data_new["name"] = self.config.root_dir + "/images/100k/train/" + data_new["name"].astype(str)
             data = pd.concat([data, data_new], axis=0)
-        if database in ['bdd_valid', 'bdd_all', 'all']:
+        if self.config.database in ['bdd_valid', 'bdd_all', 'all']:
             print(">> Loading BDD validation label dataset")
             # validation set
-            data_new = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val.json"))
+            data_new = pd.read_json(os.path.join(self.config.root_dir, "labels/bdd100k_labels_images_val.json"))
             # concat paths to images, since different for training and val set
-            data_new["name"] = self.root_dir + "/images/100k/val/" + data_new["name"].astype(str)
+            data_new["name"] = self.config.root_dir + "/images/100k/val/" + data_new["name"].astype(str)
             data = pd.concat([data, data_new], axis=0)
         # Simplify data structure
         data['weather'] = data.attributes.apply(lambda x: x['weather'])
@@ -74,31 +73,31 @@ class NightDriveDataset(Dataset):
         # return full data
         return data
 
-    def _drop_classes(self, dropclass_dict):
+    def _drop_classes(self):
         """Drop classes"""
         # drop samples with unwanted classes
-        for k, v in dropclass_dict.items():
+        for k, v in self.config.dropclass_dict.items():
             if k in self.data.columns:
                 self.data = self.data.loc[~self.data[k].isin(v)]
         return self.data.reset_index(drop=True)
 
-    def _merge_classes(self, mergeclass_dict):
+    def _merge_classes(self):
         """Merge classes"""
         # merge classes
-        for kk, vv in mergeclass_dict.items():  # for each variable key kk
+        for kk, vv in self.config.mergeclass_dict.items():  # for each variable key kk
             if kk in self.data.columns:
                 for k, v in vv.items():  # for each subdict of 'newclass': [list of old classes]
                     self.data[kk].replace(v, k, inplace=True)
         return self.data.reset_index(drop=True)
 
     def _split_data(self, split):
-
+        """Split data set."""
         # cross-tabulation of available samples in space time x weather
         cross_total = pd.crosstab(self.data['timeofday'], self.data['weather'])
         cross_total = cross_total.reindex(sorted(cross_total.columns), axis=1)  # columns need to be in same order as sampler_table
 
         # Get some helpers
-        _splits = ['test', 'valid', 'train_dev', 'train']  # sampler_dict.keys()
+        _splits = ['test', 'valid', 'train_dev', 'train']  # self.config.sampler_dict.keys()
         _timeofday_classes = self.data.timeofday.unique()
         _weather_classes = np.sort(self.data.weather.unique())
         _num_weather_classes = len(_weather_classes)
@@ -114,17 +113,17 @@ class NightDriveDataset(Dataset):
 
         # First, we need to process all ocurrences of min_thr
         for s in _splits:
-            if sampler_dict[s]['class_min'] is not None:
-                sampler_table.loc[s] = sampler_dict[s]['class_min']
+            if self.config.sampler_dict[s]['class_min'] is not None:
+                sampler_table.loc[s] = self.config.sampler_dict[s]['class_min']
         cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
         assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
 
         # Second, case 'none' i.e. no balancing; note this case has priority over under and over
         for s in _splits:
-            if sampler_dict[s]['balancing'] == 'none':
-                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+            if self.config.sampler_dict[s]['balancing'] == 'none':
+                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
                     if f > 0.0:  # note this will intentionally exclude dusk/dawn
-                        _wanted = sampler_dict[s]['n'] * f * _dist_weather_classes.loc[t]
+                        _wanted = self.config.sampler_dict[s]['n'] * f * _dist_weather_classes.loc[t]
                         # correct for min_thr
                         _ = _wanted - sampler_table.loc[s, t]
                         __ = (sum(_wanted) + _.where(_ < 0).fillna(0).sum()) / sum(_wanted)
@@ -135,29 +134,29 @@ class NightDriveDataset(Dataset):
 
         # Third, we need to process all cases of undersampling ('under'); note this case has priority over 'over'
         for s in _splits:
-            if sampler_dict[s]['balancing'] == 'under':
-                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+            if self.config.sampler_dict[s]['balancing'] == 'under':
+                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
                     if f > 0.0:  # note this will intentionally exclude dusk/dawn
                         sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t],
-                                                             sampler_dict[s]['n'] * f * np.ones(
+                                                             self.config.sampler_dict[s]['n'] * f * np.ones(
                                                                  _num_weather_classes) / _num_weather_classes)  # maximum on min_thr and balanced
         cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
         assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
 
         # Fourth, we can process the cases of oversampling
-        # We oversample across all splits that want oversampling in proportion to their n
+        # We over-sample across all splits that want oversampling in proportion to their n
         # Therefore, we need to know the
-        n_total_over = sum(list({sampler_dict[k]['n'] for k in sampler_dict if sampler_dict[k]['balancing'] == 'over'}))
+        n_total_over = sum(list({self.config.sampler_dict[k]['n'] for k in self.config.sampler_dict if self.config.sampler_dict[k]['balancing'] == 'over'}))
         for s in _splits:
-            if sampler_dict[s]['balancing'] == 'over':
-                f_total_over = sampler_dict[s][ 'n'] / n_total_over  # fraction of total remaing samples per class going into this split
-                for t, f in sampler_dict[s]['class_dist'].items():  # for each timeofday
+            if self.config.sampler_dict[s]['balancing'] == 'over':
+                f_total_over = self.config.sampler_dict[s][ 'n'] / n_total_over  # fraction of total remaing samples per class going into this split
+                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
                     if f > 0.0:
                         # get max number of remaining samples available (for each weather condition)
                         _avail = cross_avail.loc[t]  # ! plus those that this split aleady has from min_thr, if any
                         # get the assigned fraction of them for this split
                         _assigned = _avail * f_total_over
-                        _wanted = sampler_dict[s]['n'] * f * np.ones(_num_weather_classes) / _num_weather_classes
+                        _wanted = self.config.sampler_dict[s]['n'] * f * np.ones(_num_weather_classes) / _num_weather_classes
                         _given = np.minimum(_assigned, _wanted)
                         sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t], _given)  # maximum on min_thr and balanced
                         # store number of samples to be oversampled per class
@@ -205,7 +204,6 @@ class NightDriveDataset(Dataset):
                 for we in sampler_table.columns:  # for each weather condition
                     n_samples = sampler_table.loc[(sp,td), we]
                     class_bool = self.data.split.eq('unassigned') & self.data.timeofday.eq(td) & self.data.weather.eq(we)
-                    n_samples <= sum(class_bool)
                     assert n_samples <= sum(class_bool), \
                         "Insufficient records ({}) available for target size ({}): split='{}', timeofday='{}', weather={}" \
                             .format(sum(class_bool), n_samples, sp, td, we)
@@ -230,10 +228,11 @@ class WeatherClassifierDataset(NightDriveDataset):
     # Why does this not work???
     #     def __init__(self, *args):
     #     super().__init__(*args)
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
-                                    sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
-        super().__init__(root_dir, database, split, transform, augment, sampler_dict, dropclass_dict, mergeclass_dict)
+    def __init__(self, config, split=None, transform=None, augment=None):
+        super().__init__(config, split, transform, augment)
+        # remove unneeded data
         self.data = self._tidy_data()
+        # get a dict of weather classes
         self.class_dict = dict(zip(
             list(np.sort(self.data.weather.unique())),
             list(range(self._get_num_classes())))
@@ -269,9 +268,9 @@ class WeatherClassifierDataset(NightDriveDataset):
 
 class DetectorDataset(NightDriveDataset):
     """"DataSet sub-class for Detector application in project Night-Dirve."""
-    def __init__(self, root_dir='', database="bdd_all", split=None, transform=None, augment=None,
-                                sampler_dict=None, dropclass_dict=None, mergeclass_dict=None):
-        super().__init__(root_dir, database, split, transform, augment, sampler_dict, dropclass_dict, mergeclass_dict)
+    def __init__(self, config, split=None, transform=None, augment=None):
+        super().__init__(config, split, transform, augment)
+        # remove unneeded data
         self.data = self._tidy_data()
 
     def __getitem__(self, ix):
@@ -284,16 +283,20 @@ class DetectorDataset(NightDriveDataset):
         """Tidy up data for detector training."""
         # extract releveant label data
         keep_cat = ['pedestrian', 'traffic sign']  # specify categories to keep
-        self.data['bbox'] = self._condese_labels(keep_cat)
+        self.data['bbox'] = self._condense_labels(keep_cat)
         # drop unneeded columns
         self.data.drop(columns=['weather', 'timeofday', 'scene', 'labels', 'split'], inplace=True)
         return self.data
 
-    def _condese_labels(self, keep_cat=['all']):
+    def _condense_labels(self, keep_cat=None):
         """
         Extract a condensed list of boxes of given category from a list of frame.
         Output format is [{'category: str, 'box2d': {'x1': flt, 'y1': flt, 'x2': flt, 'y2': flt}}]
         """
+        # default value for keep_cat (mutable object), keep all categories
+        if keep_cat is None:
+            keep_cat = ['all']
+        # extract bounding boxes
         bbox = np.empty((len(self.data), 0)).tolist()  # instantiate column of empty lists
         for ixf, frame in enumerate(self.data.labels):
             for label in frame:
@@ -315,28 +318,35 @@ class AugGANDataset(NightDriveDataset):
         super().__init__()
 
 
+class GetConfig():
+    """
+    Loads config file for classifier and detector training.
+    Available files:
+        ~ 'config_bdd_setA.json' : 100% day, 0% night
+        ~ 'config_bdd_setB.json' : 75% day, 25% night
+        ~ 'config_bdd_setC.json' : 50% day, 50% night
+    """
+    def __init__(self, filename):
+        # Load config file
+        import json
+        with open(filename, 'r') as f:
+            content = json.load(f)
+        # unpack content to be accessible as attributes
+        self.__dict__ = content
+        # adjust root dir by user (convenience for Till and Christoph)
+        if "home/till/" in os.getcwd():
+            self.root_dir = "/home/till/data/driving/BerkeleyDeepDrive/bdd100k"
+        elif "home/SharedFolder/" in os.getcwd():
+            self.root_dir = "/home/SharedFolder/CurrentDatasets/bdd100k"
+
+
 if __name__ == '__main__':
     """Main implements testing."""
     from pandas.testing import assert_frame_equal
 
-
-    def get_config(filename):
-        """
-        Loads config file for classifier and detector training.
-        Available files:
-            ~ 'config_bdd_setA.json' : 100% day, 0% night
-            ~ 'config_bdd_setB.json' : 75% day, 25% night
-            ~ 'config_bdd_setC.json' : 50% day, 50% night
-        """
-        import json
-        with open(filename, 'r') as f:
-            config = json.load(f)
-        return config
-
-
     # get config
-    config_file = 'config_bdd_setA.json'
-    cfg = get_config(config_file)  # see docstring for info on available config files
+    config_file = '../../config_bdd_setA.json'
+    config = GetConfig(config_file)  # see docstring for info on available config files
 
     # Spec splits to load
     splits = ["train", "train_dev", "valid", "test"]
@@ -348,15 +358,15 @@ if __name__ == '__main__':
     for s in splits:
         # WeatherClassifierDataset
         # load data twice
-        ds_A = WeatherClassifierDataset(root_dir, database=ds_database, split=s)
-        ds_B = WeatherClassifierDataset(root_dir, database=ds_database, split=s)
+        ds_A = WeatherClassifierDataset(config, split=s)
+        ds_B = WeatherClassifierDataset(config, split=s)
         # evaluate hashes
         if assert_frame_equal(ds_A.data, ds_B.data):  # empty when no difference
             raise Exception('WeatherClassifierDataset data loading not reproducible for split "' + s + '".')
         # DetectorDataset
         # load data twice
-        ds_A = DetectorDataset(root_dir, database=ds_database, split=s)
-        ds_B = DetectorDataset(root_dir, database=ds_database, split=s)
+        ds_A = DetectorDataset(config, split=s)
+        ds_B = DetectorDataset(config, split=s)
         # evaluate hashes
         if assert_frame_equal(ds_A.data, ds_B.data):  # empty when no difference
             raise Exception('WeatherClassifierDataset data loading not reproducible for split "' + s + '".')
@@ -368,7 +378,7 @@ if __name__ == '__main__':
     # load and merge all splits
     data = pd.DataFrame()
     for s in splits:
-        ds_part = WeatherClassifierDataset(root_dir, database=ds_database, split=s)
+        ds_part = WeatherClassifierDataset(config, split=s)
         data = pd.concat([data, ds_part.data], axis=0)
     # Check that all elements are unique
     if data['name'].nunique() != data.shape[0]:

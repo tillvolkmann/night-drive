@@ -6,23 +6,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
-import datasets.bdd.NightDriveDataset as bdd
+import datasets.bdd.BDDDataSets as bdd
 import sklearn.metrics as metrics
 #from tensorboardX import SummaryWriter
-
-
-def get_config(filename):
-    """
-    Loads config file for classifier and detector training.
-    Available files:
-        ~ 'config_bdd_setA.json' : 100% day, 0% night
-        ~ 'config_bdd_setB.json' : 75% day, 25% night
-        ~ 'config_bdd_setC.json' : 50% day, 50% night
-    """
-    import json
-    with open(filename, 'r') as f:
-        config = json.load(f)
-    return config
 
 
 def evaluate_f1_score(net, data_loader, num_batches = None):
@@ -47,8 +33,8 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
 if __name__ == '__main__':
 
     # get config
-    config_file = 'config_bdd_setA.json'
-    cfg = get_config(config_file)  # see docstring for info on available config files
+    config_file = '../config_bdd_setA.json'
+    cfg = bdd.GetConfig(config_file)  # see docstring for info on available config files
 
     # seeds
     torch.manual_seed(123)
@@ -82,15 +68,10 @@ if __name__ == '__main__':
     }
 
     # create data sets
-    ds_train = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="train", transform=transform["train"],
-        sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict, mergeclass_dict=cfg.mergeclass_dict)
-    ds_train_dev = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="train_dev", transform=transform["train"],
-        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
-    ds_valid = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="valid", transform=transform["valid"],
-        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
-    ds_test = bdd.WeatherClassifierDataset(cfg.root_dir, database=cfg.database, split="test", transform=transform["valid"],
-        sampler_dict = cfg.sampler_dict, dropclass_dict = cfg.dropclass_dict, mergeclass_dict = cfg.mergeclass_dict)
-
+    ds_train = bdd.WeatherClassifierDataset(cfg, split="train", transform=transform["train"])
+    ds_train_dev = bdd.WeatherClassifierDataset(cfg, split="train_dev", transform=transform["train"])
+    ds_valid = bdd.WeatherClassifierDataset(cfg, split="valid", transform=transform["valid"])
+    ds_test = bdd.WeatherClassifierDataset(cfg, split="test", transform=transform["valid"])
 
     # data loader
     dl_batch_size = 28

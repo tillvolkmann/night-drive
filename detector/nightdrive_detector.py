@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
-from datasets.bdd.NightDriveDataset import DetectorDataset
+import datasets.bdd.BDDDataSets as bdd
 import sklearn.metrics as metrics
 
 
@@ -27,8 +27,8 @@ def get_config(filename):
 if __name__ == '__main__':
 
     # get config
-    config_file = 'config_bdd_setA.json'
-    cfg = get_config(config_file)  # see docstring for info on available config files
+    config_file = '../config_bdd_setA.json'
+    cfg = bdd.GetConfig(config_file)  # see docstring for info on available config files
 
     # seeds
     torch.manual_seed(123)
@@ -62,19 +62,10 @@ if __name__ == '__main__':
     }
 
     # create data sets
-    ds_train = DetectorDataset(cfg.root_dir, database=cfg.database, split="train", transform=transform["train"],
-                                            sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict,
-                                            mergeclass_dict=cfg.mergeclass_dict)
-    ds_train_dev = DetectorDataset(cfg.root_dir, database=cfg.database, split="train_dev", transform=transform["train"],
-                                                sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict,
-                                                mergeclass_dict=cfg.mergeclass_dict)
-    ds_valid = DetectorDataset(cfg.root_dir, database=cfg.database, split="valid", transform=transform["valid"],
-                                            sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict,
-                                            mergeclass_dict=cfg.mergeclass_dict)
-    ds_test = DetectorDataset(cfg.root_dir, database=cfg.database, split="test", transform=transform["valid"],
-                                           sampler_dict=cfg.sampler_dict, dropclass_dict=cfg.dropclass_dict,
-                                           mergeclass_dict=cfg.mergeclass_dict)
-
+    ds_train = bdd.DetectorDataset(cfg, split="train", transform=transform["train"])
+    ds_train_dev = bdd.DetectorDataset(cfg, split="train_dev", transform=transform["train"])
+    ds_valid = bdd.DetectorDataset(cfg, split="valid", transform=transform["valid"])
+    ds_test = bdd.DetectorDataset(cfg, split="test", transform=transform["valid"])
 
     # data loader
     dl_batch_size = 28
