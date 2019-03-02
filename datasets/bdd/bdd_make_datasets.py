@@ -2,13 +2,9 @@ import os
 from shutil import copyfile
 import numpy as np
 import pandas as pd
-from PIL import Image
+import sys
 import BDDDataSets as bdd
 import warnings
-
-
-class InsufficientSamplesWarning(UserWarning):
-    pass
 
 
 def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
@@ -173,8 +169,14 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
     return sampler_tab, over_tab
 
 
+class InsufficientSamplesWarning(UserWarning):
+    pass
+
+
 def pandas_to_bddjson(df, dest_path):
-    ### Prepare data frame for json output
+    """
+    Prepare data frame for json output in BDD format.
+    """
     # revolve formatting back to BDD original formatting
     df["timestamp"] = 1000
     df.name = df.name.apply(os.path.basename)
@@ -184,133 +186,214 @@ def pandas_to_bddjson(df, dest_path):
     df.to_json(path_or_buf=dest_path)
 
 
-cfg_name = '/home/till/projects/night-drive/config_bdd_make_datasets.json'
-cfg = bdd.GetConfig(cfg_name)
+if __name__ == "__main__":
 
-# Load full BDD dataset
-data = bdd.BaseDataset(cfg)
-data = data.data
+    # get config containing all the sampler info
+    cfg_name = '/home/till/projects/night-drive/config/config_bdd_make_datasets.json'
+    cfg = bdd.GetConfig(cfg_name)
 
-# cross-tabulation of available samples in space time x weather
-crosstab_total = pd.crosstab(data['timeofday'], data['weather'])
-crosstab_total = crosstab_total.reindex(sorted(crosstab_total.columns), axis=1)  # columns need to be in same order as sampler_table
+    # Load full BDD dataset
+    data = bdd.BaseDataset(cfg)
+    data = data.data
 
-cfg = bdd.GetConfig(cfg_name)
-# initialize sampler_table and over_table dict to collect all the outputs
-sampler_table = {}
-over_table = {}
-# initialize cross tabulation of remaining available images to choose from
-crosstab_avail = crosstab_total.copy()
+    # write prints to log file in destination folder
+    old_stdout = sys.stdout
+    os.makedirs(cfg.destination_path)
+    log_file = open(os.path.join(cfg.destination_path, "bdd_make_datasets_log.log"), "w")
+    sys.stdout = log_file
 
-# first, we get the test set
-sampler_table["test"], over_table["test"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["test"])
-# update the numbers of remaining available images
-crosstab_avail = crosstab_avail - sampler_table["test"]
+    # ==================================================================================================================
+    # DETERMINE SAMPLE CLASS DISTRIBUTIONS ACROSS SETS AND SPLITS
+    # ==================================================================================================================
+    # cross-tabulation of available samples in space time x weather
+    crosstab_total = pd.crosstab(data['timeofday'], data['weather'])
+    crosstab_total = crosstab_total.reindex(sorted(crosstab_total.columns), axis=1)  # columns need to be in same order as sampler_table
 
+    # initialize sampler_table and over_table dict to collect all the outputs
+    sampler_table = {}
+    over_table = {}
+    # initialize cross tabulation of remaining available images to choose from
+    crosstab_avail = crosstab_total.copy()
 
-# second, we get the valid set
-sampler_table["valid"], over_table["valid"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["valid"])
-# update the numbers of remaining available images
-crosstab_avail = crosstab_avail - sampler_table["valid"]
+    # first, we get the test set
+    sampler_table["test"], over_table["test"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["test"])
+    # update the numbers of remaining available images
+    crosstab_avail = crosstab_avail - sampler_table["test"]
 
+    # second, we get the valid set
+    sampler_table["valid"], over_table["valid"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["valid"])
+    # update the numbers of remaining available images
+    crosstab_avail = crosstab_avail - sampler_table["valid"]
 
-# third, we get all the different train sets; note we are not updating the remaining available samples here
-sampler_table["train_A"], over_table["train_A"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_A"])
-sampler_table["train_B"], over_table["train_B"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_B"])
-sampler_table["train_C"], over_table["train_C"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_C"])
+    # third, we get all the different train sets; note we are not updating the remaining available samples here
+    sampler_table["train_A"], over_table["train_A"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_A"])
+    sampler_table["train_B"], over_table["train_B"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_B"])
+    sampler_table["train_C"], over_table["train_C"] = stratified_sampler(crosstab_total, crosstab_avail, cfg.sampler_dict["train_C"])
 
+    # the train-dev sets are taken as subsets of the train sets
+    train_sets = [k for k in cfg.sampler_dict.keys() if 'train' in k]
+    sets = ["set_" + k[-1] for k in train_sets]
+    for train_set in train_sets:
+        train_dev_set = "train_dev_" + train_set[-1]
+        sampler_table[train_dev_set] = sampler_table[train_set] * cfg.train_dev_n / cfg.sampler_dict[train_set]["n"]
+        sampler_table[train_set] = sampler_table[train_set] - sampler_table[train_dev_set]
+        over_table[train_dev_set] = over_table[train_set] * cfg.train_dev_n / cfg.sampler_dict[train_set]["n"]
+        over_table[train_set] = over_table[train_set] - over_table[train_dev_set]
 
-train_sets = [k for k in cfg.sampler_dict.keys() if 'train' in k]
-sets = ["set_"+k[-1] for k in train_sets]
+    # create a useful info_dict containing info about each split element of sampler dict
+    info_dict = {}
+    info_dict["splits"] = sampler_table.keys()
+    for split in info_dict["splits"]:
+        info_dict[split] = {}
+        # set association
+        if split in ["test", "valid"]:
+            info_dict[split]["set"] = "set_all"
+        else:
+            info_dict[split]["set"] = "set_" + split[-1]
+        # part name
+        if split in ["test", "valid"]:
+            info_dict[split]["split"] = split
+        else:
+            info_dict[split]["split"] = split[:-2]
+        # destination path
+        if cfg.do_make_dirs:  # create a separate dir for each split
+            info_dict[split]["destination_path"] = os.path.join(cfg.destination_path, split)
+        else:  # create all files in the same dir
+            info_dict[split]["destination_path"] = cfg.destination_path
+        # destination file names
+        info_dict[split]["destination_json_filename"] = cfg.destination_filename_stem + split + ".json"
+        info_dict[split]["destination_json_over_filename"] = cfg.destination_filename_stem + split + "_over" + ".json"
+        # destination file path
+        info_dict[split]["destination_json_filepath"] = os.path.join(info_dict[split]["destination_path"],
+                                                                     info_dict[split]["destination_json_filename"])
+        info_dict[split]["destination_json_over_filepath"] = os.path.join(info_dict[split]["destination_path"],
+                                                                          info_dict[split][
+                                                                              "destination_json_over_filename"])
 
+    # ==================================================================================================================
+    # SAMPLING OF IMAGE FOR THE DIFFERENT SETS AND SPLITS
+    # ==================================================================================================================
+    # add a column to the dataframe indicating split association (train, train-dev, dev, and test set)
+    data["set_all"] = 'unassigned'
+    for s in sets:
+        data[s] = 'unassigned'  # initialize with all 'unassigned'
+        data[s + "_n_over"] = 0
+    # shuffle data and reset index
+    data = data.sample(frac=1.0, random_state=123).reset_index(drop=True)
+    # set seed for numpy
+    np.random.seed(123)
 
-# the train-dev sets are taken as subsets of the train sets
-for train_set in train_sets:
-    train_dev_set = "train_dev_" + train_set[-1]
-    sampler_table[train_dev_set] = sampler_table[train_set] * cfg.train_dev_n / cfg.sampler_dict[train_set]["n"]
-    sampler_table[train_set] = sampler_table[train_set] - sampler_table[train_dev_set]
-    over_table[train_dev_set] = over_table[train_set] * cfg.train_dev_n / cfg.sampler_dict[train_set]["n"]
-    over_table[train_set] = over_table[train_set] - over_table[train_dev_set]
-
-
-# add a column to the dataframe indicating split association (train, train-dev, dev, and test set)
-data["set_all"] = 'unassigned'
-for s in sets:
-    data[s] = 'unassigned'  # initialize with all 'unassigned'
-    data[s+"_n_over"] = 0
-# shuffle data and reset index
-data = data.sample(frac=1.0, random_state=123).reset_index(drop=True)
-# set seed for numpy
-np.random.seed(123)
-
-# stratified random sampling of indices for split sets based on sampler_table
-for split, table in sampler_table.items():  # for each split
-    for tod in table.index:  # for each timeofday
-        for wc in table.columns:  # for each weather condition
-            n_samples = int(table.loc[tod,wc])
-            if n_samples > 0:
-                if split in ["valid", "test"]:
-                    class_idx = data[(data.set_all.eq('unassigned') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
-                    idx = class_idx[0:n_samples]  # np.random.choice(self.data.index[class_bool].values, size=n_samples, replace=False)
-                    data.loc[idx,["set_all", *sets]] = split
-                else:
-                    cur_set = "set_"+split[-1]
-                    if "train" in split and "train_dev" not in split:
-                        # try to use data already in another train set
-                        idx = data[(data.set_all.str.contains('train') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
-                        n = idx.size
-                        if n >= n_samples:
-                            idx = idx[0:n_samples]
-                        else:
-                            idx_add = data[(data.set_all.eq('unassigned') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
-                            idx = np.hstack([idx, idx_add[0:n_samples - n]] )
-                        data.loc[idx,["set_all", cur_set]] = "train"
-                    elif "train_dev" in split:
-                        # try to use data already in another train dev set
-                        idx = data[(data.set_all.str.contains('train_dev') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
-                        n = idx.size
-                        if n >= n_samples:
-                            idx = idx[0:n_samples]
-                        else:
+    # stratified random sampling of indices for split sets based on sampler_table
+    for split, table in sampler_table.items():  # for each split
+        for tod in table.index:  # for each timeofday
+            for wc in table.columns:  # for each weather condition
+                n_samples = int(table.loc[tod, wc])
+                if n_samples > 0:
+                    if split in ["valid", "test"]:
+                        class_idx = data[
+                            (data.set_all.eq('unassigned') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
+                        idx = class_idx[
+                              0:n_samples]  # np.random.choice(self.data.index[class_bool].values, size=n_samples, replace=False)
+                        data.loc[idx, ["set_all", *sets]] = split
+                    else:
+                        cur_set = "set_" + split[-1]
+                        if "train" in split and "train_dev" not in split:
                             # try to use data already in another train set
-                            idx_add = data[(data.set_all.str.contains('train') & ~data[cur_set].str.contains('train') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
-                            n_add = idx_add.size
-                            idx = np.hstack([idx, idx_add[0:np.minimum(n_samples - n, n_add)]] )
+                            idx = data[(data.set_all.str.contains('train') & data.timeofday.eq(tod) & data.weather.eq(
+                                wc))].index
                             n = idx.size
-                            if n < n_samples:
-                                idx_add = data[(data.set_all.eq('unassigned') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
+                            if n >= n_samples:
+                                idx = idx[0:n_samples]
+                            else:
+                                idx_add = data[(
+                                            data.set_all.eq('unassigned') & data.timeofday.eq(tod) & data.weather.eq(
+                                        wc))].index
+                                idx = np.hstack([idx, idx_add[0:n_samples - n]])
+                            data.loc[idx, ["set_all", cur_set]] = "train"
+                        elif "train_dev" in split:
+                            # try to use data already in another train dev set
+                            idx = data[(data.set_all.str.contains('train_dev') & data.timeofday.eq(
+                                tod) & data.weather.eq(wc))].index
+                            n = idx.size
+                            if n >= n_samples:
+                                idx = idx[0:n_samples]
+                            else:
+                                # try to use data already in another train set
+                                idx_add = data[(data.set_all.str.contains('train') & ~data[cur_set].str.contains(
+                                    'train') & data.timeofday.eq(tod) & data.weather.eq(wc))].index
                                 n_add = idx_add.size
-                                idx = np.hstack([idx, idx_add[0:np.minimum(n_samples - n, n_add)]] )
-                        data.loc[idx,["set_all", cur_set]] = "train_dev"
-                    # store number of over-samples
-                    idx_over = np.random.choice(idx, over_table[split].loc[tod,wc].astype("int"))
-                    idx_uni, counts = np.unique(idx_over, return_counts=True)
-                    data.loc[idx_uni, cur_set+"_n_over"] = counts
+                                idx = np.hstack([idx, idx_add[0:np.minimum(n_samples - n, n_add)]])
+                                n = idx.size
+                                if n < n_samples:
+                                    idx_add = data[(data.set_all.eq('unassigned') & data.timeofday.eq(
+                                        tod) & data.weather.eq(wc))].index
+                                    n_add = idx_add.size
+                                    idx = np.hstack([idx, idx_add[0:np.minimum(n_samples - n, n_add)]])
+                            data.loc[idx, ["set_all", cur_set]] = "train_dev"
+                        # store number of over-samples
+                        idx_over = np.random.choice(idx, over_table[split].loc[tod, wc].astype("int"))
+                        idx_uni, counts = np.unique(idx_over, return_counts=True)
+                        data.loc[idx_uni, cur_set + "_n_over"] = counts
 
+    # ==================================================================================================================
+    # SAVE ANNOTATION FILES AND COPY IMAGES
+    # ==================================================================================================================
 
-# create a useful info_dict containing info about each split element of sampler dict
-info_dict = {}
-info_dict["splits"] = sampler_table.keys()
-for split in info_dict["splits"]:
-    info_dict[split] = {}
-    # set association
-    if split in ["test", "valid"]:
-        info_dict[split]["set"] = "set_all"
-    else:
-        info_dict[split]["set"] = "set_" + split[-1]
-    # part name
-    if split in ["test", "valid"]:
-        info_dict[split]["split"] = split
-    else:
-        info_dict[split]["split"] = split[:-2]
-    # destination path
-    if cfg.do_make_dirs:  # create a separate dir for each split
-        info_dict[split]["destination_path"] = os.path.join(cfg.destination_path, split)
-    else:  # create all files in the same dir
-        info_dict[split]["destination_path"] = cfg.destination_path
-    # destination file names
-    info_dict[split]["destination_json_filename"] = cfg.destination_filename_stem + split + ".json"
-    info_dict[split]["destination_json_over_filename"] = cfg.destination_filename_stem + split + "_over" + ".json"
-    # destination file path
-    info_dict[split]["destination_json_filepath"] = os.path.join(info_dict[split]["destination_path"], info_dict[split]["destination_json_filename"])
-    info_dict[split]["destination_json_over_filepath"] = os.path.join(info_dict[split]["destination_path"], info_dict[split]["destination_json_over_filename"])
+    # now separate data, copy images, and create the different jsons
+    for split in info_dict["splits"]:  # for each split
+
+        # get all elements associated with the current split into a separate data frame
+        if split in ["test", "valid"]:
+            cur_file = data.query("set_all==@split").reset_index(drop=True)
+        else:
+            # cur_split = info_dict[split]['split']
+            cur_split = info_dict[split]['split']
+            cur_file = data.query("{}==@cur_split".format(info_dict[split]['set'])).reset_index(drop=True)
+
+        # create folder structure
+        if not os.path.exists(info_dict[split]["destination_path"]):
+            os.makedirs(info_dict[split]["destination_path"])
+        else:
+            raise Exception("Destination folder(s) already exist.")
+
+        # save a json in bdd format containing only the original images
+        pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_filepath"])
+
+        # copy original images associated with current split into new folder
+        if cfg.do_copy_images:
+            print("Copying {} images to {}".format(cur_file.shape[0], info_dict[split]["destination_path"]))
+            for img_path in cur_file["name"]:
+                copyfile(img_path, os.path.join(info_dict[split]["destination_path"], os.path.basename(img_path)))
+
+        # append over-samples to cur_file (
+        if split not in ["test", "valid"]:
+            col_name = info_dict[split]['set'] + "_n_over"
+            cf_shape_before = cur_file.shape[0]
+            for i in range(cf_shape_before):
+                n_over = int(cur_file.loc[i, col_name])
+                for j in range(n_over):
+                    # if no physical copies are made, the same record (including the original filename) is appended to the data
+                    cur_file.loc[cur_file.shape[0], :] = cur_file.loc[i, :]
+                    # if requested, make physical copies of the over-samples
+                    if cfg.do_oversample_physically:
+                        # in this case, file names of copies are given by: original file name + copy1, copy2, etc.
+                        name_original = cur_file.loc[i, "name"]
+                        name_copy = os.path.join(info_dict[split]["destination_path"], os.path.basename(
+                            name_original.split(".")[0] + "_copy" + str(j + 1)
+                            + "." + name_original.split(".")[1]))  # rename file by appending _copy1, _copy2, etc
+                        print(name_original, '>>>\n', name_copy)
+                        copyfile(name_original, name_copy)
+                        cur_file.loc[cur_file.shape[0] - 1, "name"] = name_copy  # store the new name
+                    if not i % 1000:
+                        print("Physical over-sampling done for {} of {} entries.".format(i, cf_shape_before))
+
+        # save a json in bdd format containing also the over-samples
+        pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_over_filepath"])
+
+        # write a main json containing the combined information for all splits, including additional info columns
+        data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main" + ".json"))
+
+    # close log file
+    sys.stdout = old_stdout
+    log_file.close()
+

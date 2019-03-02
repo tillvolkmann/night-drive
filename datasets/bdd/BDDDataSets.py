@@ -218,6 +218,13 @@ class GetConfig():
             with open(cfg_path, 'r') as f:
                 content = json.load(f)
 
+        # replace occurrences of "True"/"False" by True/False (i.e. stringy by booleans)
+        for k, v in content.items():
+            if v == "True":
+                content[k] = True
+            elif v == "False":
+                content[k] = False
+
         # unpack content to be accessible as attributes
         self.__dict__ = content
 
