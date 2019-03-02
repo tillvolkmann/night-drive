@@ -5,8 +5,11 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 
-class NightDriveDataset(Dataset):
-
+class BaseDataset(Dataset):
+    """
+    split: str specifying split sub-set to return. Values include ['train', 'train_dev', 'valid', 'test', 'all']. Option
+            'all' returns complete data set with split association indicated in column 'split'.
+    """
     def __init__(self, config, split=None, transform=None, augment=None):
         """ Constructor """
         self.config = config
@@ -21,7 +24,7 @@ class NightDriveDataset(Dataset):
             self.data = self._split_data(split)
 
     def __len__(self):
-        """Provides the size of the dataset."""
+        """Provides the size (number of images) of the dataset."""
         return self.data.shape[0]
 
     def __getitem__(self, ix):
@@ -43,7 +46,15 @@ class NightDriveDataset(Dataset):
         return img
 
     def _load_data(self):
-        """Read Berkeley Deep Drive label json."""
+        """Read Berkeley Deep Drive label json.
+
+            'bdd_train': original bdd train set
+            'bdd_valid': original bdd valid set
+            'bdd_all': original bdd train & valid sets
+            'bdd_train_expA' : experimental bdd train data set A
+            'bdd_train_expB' : experimental bdd train data set B
+            'bdd_train_expC' : experimental bdd train data set C
+        """
         # Load databases
         data = pd.DataFrame()
         if self.config.database in ['bdd_train', 'bdd_all', 'all']:
@@ -90,141 +101,9 @@ class NightDriveDataset(Dataset):
                     self.data[kk].replace(v, k, inplace=True)
         return self.data.reset_index(drop=True)
 
-    def _split_data(self, split):
-        """Split data set."""
-        # cross-tabulation of available samples in space time x weather
-        cross_total = pd.crosstab(self.data['timeofday'], self.data['weather'])
-        cross_total = cross_total.reindex(sorted(cross_total.columns), axis=1)  # columns need to be in same order as sampler_table
 
-        # Get some helpers
-        _splits = ['test', 'valid', 'train_dev', 'train']  # self.config.sampler_dict.keys()
-        _timeofday_classes = self.data.timeofday.unique()
-        _weather_classes = np.sort(self.data.weather.unique())
-        _num_weather_classes = len(_weather_classes)
-        _num_timeofday_classes = len(_weather_classes)
-        _dist_weather_classes = cross_total.div(cross_total.sum(axis=1), axis=0)
-
-        # Initialize empty sampler table
-        iterables = [_splits, _timeofday_classes]
-        index = pd.MultiIndex.from_product(iterables, names=['split', 'timeofday'])
-        sampler_table = pd.DataFrame(np.zeros([8, len(_weather_classes)]), index=index, columns=_weather_classes)
-        sampler_table = sampler_table.reindex(sorted(sampler_table.columns), axis=1)
-        over_table = sampler_table.copy()
-
-        # First, we need to process all ocurrences of min_thr
-        for s in _splits:
-            if self.config.sampler_dict[s]['class_min'] is not None:
-                sampler_table.loc[s] = self.config.sampler_dict[s]['class_min']
-        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
-        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
-
-        # Second, case 'none' i.e. no balancing; note this case has priority over under and over
-        for s in _splits:
-            if self.config.sampler_dict[s]['balancing'] == 'none':
-                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
-                    if f > 0.0:  # note this will intentionally exclude dusk/dawn
-                        _wanted = self.config.sampler_dict[s]['n'] * f * _dist_weather_classes.loc[t]
-                        # correct for min_thr
-                        _ = _wanted - sampler_table.loc[s, t]
-                        __ = (sum(_wanted) + _.where(_ < 0).fillna(0).sum()) / sum(_wanted)
-                        _wanted = _wanted * __
-                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t], _wanted)  # maximum on min_thr and balanced
-        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
-        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
-
-        # Third, we need to process all cases of undersampling ('under'); note this case has priority over 'over'
-        for s in _splits:
-            if self.config.sampler_dict[s]['balancing'] == 'under':
-                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
-                    if f > 0.0:  # note this will intentionally exclude dusk/dawn
-                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t],
-                                                             self.config.sampler_dict[s]['n'] * f * np.ones(
-                                                                 _num_weather_classes) / _num_weather_classes)  # maximum on min_thr and balanced
-        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
-        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
-
-        # Fourth, we can process the cases of oversampling
-        # We over-sample across all splits that want oversampling in proportion to their n
-        # Therefore, we need to know the
-        n_total_over = sum(list({self.config.sampler_dict[k]['n'] for k in self.config.sampler_dict if self.config.sampler_dict[k]['balancing'] == 'over'}))
-        for s in _splits:
-            if self.config.sampler_dict[s]['balancing'] == 'over':
-                f_total_over = self.config.sampler_dict[s][ 'n'] / n_total_over  # fraction of total remaing samples per class going into this split
-                for t, f in self.config.sampler_dict[s]['class_dist'].items():  # for each timeofday
-                    if f > 0.0:
-                        # get max number of remaining samples available (for each weather condition)
-                        _avail = cross_avail.loc[t]  # ! plus those that this split aleady has from min_thr, if any
-                        # get the assigned fraction of them for this split
-                        _assigned = _avail * f_total_over
-                        _wanted = self.config.sampler_dict[s]['n'] * f * np.ones(_num_weather_classes) / _num_weather_classes
-                        _given = np.minimum(_assigned, _wanted)
-                        sampler_table.loc[s, t] = np.maximum(sampler_table.loc[s, t], _given)  # maximum on min_thr and balanced
-                        # store number of samples to be oversampled per class
-                        over_table.loc[s, t] = _wanted - sampler_table.loc[s, t]
-        cross_avail = cross_total - sampler_table.groupby(level='timeofday').sum()
-        print(cross_avail.astype('int32'))
-        print(sampler_table.astype('int32'))
-        assert ~(cross_avail < 0).any().any(), 'Error, insufficient samples available to fullfil request.'
-
-        # cast to int
-        sampler_table = sampler_table.astype('int32')
-        over_table = over_table.astype('int32')
-
-        # print some summary stats
-        sampler_table_show = sampler_table.copy()
-        sampler_table_show['total'] = sampler_table_show.sum(axis=1)
-        print('\nMulti-variate distribution of unique original samples for each split:\n')
-        print(sampler_table_show.reindex(sorted(sampler_table_show.index), axis=0))
-        sampler_table_show = sampler_table_show.groupby(level='split').sum()
-        print('\nUnique sample distribution grouped by split:\n')
-        print(sampler_table_show.reindex(sorted(sampler_table_show.index), axis=0))
-        print('\nUnique samples not used:\n')
-        print(cross_avail.reindex(sorted(cross_avail.index), axis=0).astype('int32'))
-        print('\nMulti-variate distribution of oversampling samples across splits:\n')
-        over_table_show = over_table.copy()
-        over_table_show['total'] = over_table_show.sum(axis=1)
-        print(over_table_show.reindex(sorted(over_table_show.index), axis=0))
-        #
-        print('\nCross tabulation of original samples timeofday x weather:\n')
-        cross_total_show = cross_total.copy()
-        cross_total_show['total'] = cross_total_show.sum(axis=1)
-        print(cross_total_show)
-
-        # add a column to the dataframe indicating split association (train, train-dev, dev, and test set)
-        self.data['split'] = 'unassigned'  # initialize with all 'unassigned'
-        # shuffle data and reset index
-        self.data = self.data.sample(frac=1.0, random_state=123).reset_index(drop=True)
-
-        # stratified random sampling of indices for split sets based on sampler_table; note that sequential processing
-        # split sets up to the selected split is necessary to obtain reproducible results
-        np.random.seed(123)
-        data_out = pd.DataFrame()
-        for sp in _splits:   # sampler_table.index.get_level_values(level='split').unique():  # for each split set; note order matters here if reproducibility is needed, i.e. val and test need to go first
-            for td in sampler_table.index.get_level_values(level='timeofday').unique():  # for each timeofday
-                for we in sampler_table.columns:  # for each weather condition
-                    n_samples = sampler_table.loc[(sp,td), we]
-                    class_bool = self.data.split.eq('unassigned') & self.data.timeofday.eq(td) & self.data.weather.eq(we)
-                    assert n_samples <= sum(class_bool), \
-                        "Insufficient records ({}) available for target size ({}): split='{}', timeofday='{}', weather={}" \
-                            .format(sum(class_bool), n_samples, sp, td, we)
-                    idx = np.random.choice(self.data.index[class_bool].values, size=n_samples, replace=False)
-                    self.data.loc[idx, 'split'] = sp
-                    # we can terminate this process as soon as we are done with the requested class
-                    if sp == split:
-                        # query split set based on split column
-                        n_over = over_table.loc[(sp, td), we]
-                        if n_over > 0:
-                            idx = np.hstack((idx, np.random.choice(idx, size=n_over, replace=True)))
-                        data_out = pd.concat([data_out, self.data.loc[idx]], axis=0)
-            # we can terminate the assignment process as soon as we are done with the requested split
-            if sp == split:
-                return data_out.sample(frac=1.0, replace=False, random_state=123).reset_index(drop=True)
-        # in case no split was requested, we return the orignial data with the added column indicating split assignment
-        return self.data.sample(frac=1.0, replace=False, random_state=123).reset_index(drop=True)
-
-
-class WeatherClassifierDataset(NightDriveDataset):
-    """"DataSet sub-class for Weatehr classifier in project Night-Dirve."""
+class WeatherClassifierDataset(BaseDataset):
+    """"DataSet sub-class for Weatehr classifier in project Night-Drive."""
     # Why does this not work???
     #     def __init__(self, *args):
     #     super().__init__(*args)
@@ -266,7 +145,7 @@ class WeatherClassifierDataset(NightDriveDataset):
         return self.class_dict
 
 
-class DetectorDataset(NightDriveDataset):
+class DetectorDataset(BaseDataset):
     """"DataSet sub-class for Detector application in project Night-Dirve."""
     def __init__(self, config, split=None, transform=None, augment=None):
         super().__init__(config, split, transform, augment)
@@ -313,7 +192,7 @@ class DetectorDataset(NightDriveDataset):
         return self.data.bbox.apply(lambda x: len(x)).values
 
 
-class AugGANDataset(NightDriveDataset):
+class AugGANDataset(BaseDataset):
     def __init__(self):
         super().__init__()
 
@@ -327,12 +206,21 @@ class GetConfig():
         ~ 'config_bdd_setC.json' : 50% day, 50% night
     """
     def __init__(self, filename):
-        # Load config file
         import json
-        with open(filename, 'r') as f:
-            content = json.load(f)
+        import os
+        # Load config file
+        try:
+            with open(filename, 'r') as f:
+                content = json.load(f)
+        except FileNotFoundError:   # try to load cfg file from config directory, works when cwd somewhere within night drive
+            cfg_path = os.path.join(os.getcwd()[:os.getcwd().find("night-drive/") + 12], "config/")
+            cfg_path = os.path.join(cfg_path, os.path.basename(filename))
+            with open(cfg_path, 'r') as f:
+                content = json.load(f)
+
         # unpack content to be accessible as attributes
         self.__dict__ = content
+
         # adjust root dir by user (convenience for Till and Christoph)
         if "home/till/" in os.getcwd():
             self.root_dir = "/home/till/data/driving/BerkeleyDeepDrive/bdd100k"
@@ -344,44 +232,60 @@ if __name__ == '__main__':
     """Main implements testing."""
     from pandas.testing import assert_frame_equal
 
-    # get config
-    config_file = '../../config_bdd_setA.json'
-    config = GetConfig(config_file)  # see docstring for info on available config files
-
-    # Spec splits to load
     splits = ["train", "train_dev", "valid", "test"]
 
     print('>>> ===========================================')
     print('>>> Performing Dataset integrity tests.')
     print('>>> ===========================================')
-    # Verify that data set composition is reproducible
-    for s in splits:
+    # Verify that data set composition is reproducible for a given split and set (test only perfomed for set A)
+    config_file = '../../config_bdd_setA.json'
+    config = GetConfig(config_file)  # see docstring for info on available config files
+    for spl in splits:
         # WeatherClassifierDataset
         # load data twice
-        ds_A = WeatherClassifierDataset(config, split=s)
-        ds_B = WeatherClassifierDataset(config, split=s)
+        ds_A = WeatherClassifierDataset(config, split=spl)
+        ds_B = WeatherClassifierDataset(config, split=spl)
         # evaluate hashes
         if assert_frame_equal(ds_A.data, ds_B.data):  # empty when no difference
-            raise Exception('WeatherClassifierDataset data loading not reproducible for split "' + s + '".')
+            raise Exception('WeatherClassifierDataset data loading not reproducible for split "' + spl + '".')
         # DetectorDataset
         # load data twice
-        ds_A = DetectorDataset(config, split=s)
-        ds_B = DetectorDataset(config, split=s)
+        ds_A = DetectorDataset(config, split=spl)
+        ds_B = DetectorDataset(config, split=spl)
         # evaluate hashes
         if assert_frame_equal(ds_A.data, ds_B.data):  # empty when no difference
-            raise Exception('WeatherClassifierDataset data loading not reproducible for split "' + s + '".')
+            raise Exception('DetectorDataset data loading not reproducible for split "' + spl + '".')
     else:
         print('>>> WeatherClassifierDataset data loading verified reproducible for all splits.')
+
+    # Verify that test and validation is constant across sets A,B,C
+    for spl in ['valid', 'test']:
+        # load data twice using WeatherClassifierDataset
+        config_file = '../../config_bdd_setA.json'
+        config = GetConfig(config_file)  # see docstring for info on available config files
+        ds_A = WeatherClassifierDataset(config, split=spl)
+        config_file = '../../config_bdd_setB.json'
+        config = GetConfig(config_file)  # see docstring for info on available config files
+        ds_B = WeatherClassifierDataset(config, split=spl)
+        config_file = '../../config_bdd_setC.json'
+        config = GetConfig(config_file)  # see docstring for info on available config files
+        ds_C = WeatherClassifierDataset(config, split=spl)
+        # validate consistency of validation sets across sets A, B, C
+        assert ds_A.data.name.isin(ds_B.data.name).value_counts().all(), \
+            'The test set is not consistent among sets A and B.'
+        assert ds_A.data.name.isin(ds_C.data.name).value_counts().all(), \
+            'The test set is not consistent among sets A and C.'
 
     # Verify that all elements across all data splits are unique
     # WeatherClassifierDataset
     # load and merge all splits
-    data = pd.DataFrame()
-    for s in splits:
-        ds_part = WeatherClassifierDataset(config, split=s)
-        data = pd.concat([data, ds_part.data], axis=0)
-    # Check that all elements are unique
-    if data['name'].nunique() != data.shape[0]:
+    name = pd.Series()
+    for spl in splits:
+        data_part = WeatherClassifierDataset(config, split=spl)
+        name_part = data_part['name'].unique()  # this is to eliminate oversampled duplicates
+        name = pd.concat([name, name_part])
+    # Check that all elements are unique, i.e. no leaking of information
+    if name.nunique() != name.size:
         raise Exception('WeatherClassifierDataset data splits contain non-unique items.')
     else:
         print('>>> WeatherClassifierDataset data splits verified to contain only unique items.')
