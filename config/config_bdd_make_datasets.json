@@ -4,9 +4,9 @@
     "dropclass_dict": {"weather": ["undefined", "foggy"], "timeofday": ["undefined", "dawn/dusk"]},
     "mergeclass_dict": {"weather": {"cloudy": ["overcast", "partly cloudy"]}},
     "sampler_dict": {
-        "train_A":   {"n": 42000,   "class_dist": {"daytime": 1.0, "dawn/dusk": 0.0, "night": 0.0},   "balancing": "like-day",  "over": "before",  "class_min": 0},
-        "train_B":   {"n": 42000,   "class_dist": {"daytime": 0.75, "dawn/dusk": 0.0, "night": 0.25}, "balancing": "like-day",  "over": "before",  "class_min": 22},
-        "train_C":   {"n": 42000,   "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "like-day",  "over": "before",  "class_min": 44},
+        "train_A":   {"n": 53500,   "class_dist": {"daytime": 1.0, "dawn/dusk": 0.0, "night": 0.0},   "balancing": "like-day",  "over": "before",  "class_min": 0},
+        "train_B":   {"n": 53500,   "class_dist": {"daytime": 0.75, "dawn/dusk": 0.0, "night": 0.25}, "balancing": "like-day",  "over": "before",  "class_min": 22},
+        "train_C":   {"n": 53500,   "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "like-day",  "over": "before",  "class_min": 44},
         "valid":     {"n": 2000,    "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "none",  "over": "none", "class_min": 50},
         "test":      {"n": 2000,    "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "none",  "over": "none", "class_min": 50}
     },
