@@ -208,7 +208,10 @@ def pandas_to_bddjson(df, dest_path):
     df["attributes"] = df.apply(lambda row: {'weather':row['weather'], 'scene':row['scene'], 'timeofday':row['timeofday']}, axis=1)  # This gives warning: another try: cur_file["attributes"] = [{'weather': we, 'scene': sc, 'timeofday': tod} for we, sc, tod in zip(cur_file.weather, cur_file.scene, cur_file.timeofday)]
     df = df[["attributes", "labels", "name", "timestamp"]]
     # write json file to hdd
-    df.to_json(path_or_buf=dest_path)
+    if cfg.version == 0:
+        df.to_json(path_or_buf=dest_path)
+    elif cfg.version == 1:  # new version, avoids writing pandas index to json; should only make a difference downstream when json.load is used, not when pd.read_json is used
+        df.to_json(path_or_buf=dest_path, orient="records")
 
 
 if __name__ == "__main__":
@@ -415,8 +418,23 @@ if __name__ == "__main__":
         # save a json in bdd format containing also the over-samples
         pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_over_filepath"])
 
-        # write a main json containing the combined information for all splits, including additional info columns
+    # copy images not used to folder "rest"
+    if cfg.do_copy_images:
+        data_notused = data.query("set_all=='unassigned'").reset_index(drop=True)
+        path_rest = os.path.join(cfg.destination_path, "rest")
+        os.makedirs(path_rest)
+        print("Copying {} images to {}".format(data_notused.shape[0], path_rest))
+        for img_path in data_notused["name"]:
+            copyfile(img_path, os.path.join(path_rest, os.path.basename(img_path)))
+
+    # write a main json containing the combined information for all splits, including additional info columns
+    # first get relative path for images
+    data.name = data.name.map(os.path.basename)
+    # now write
+    if cfg.version == 0:
         data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main" + ".json"))
+    elif cfg.version == 1:
+        data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main" + ".json"), orient="records")
 
     # close log file
     sys.stdout = old_stdout
