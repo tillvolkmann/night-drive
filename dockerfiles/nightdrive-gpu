@@ -1,0 +1,83 @@
+# Base image
+FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
+
+# Setup system
+RUN apt-get clean && apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends apt-utils tzdata software-properties-common build-essential gcc libsm6 libxrender1 libxext6 libxtst6 libxi6 libfreetype6 git wget nano ffmpeg
+
+# Install Python 3.6 and pip
+RUN add-apt-repository ppa:jonathonf/python-3.6 -y && apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.6 python3.6-dev python3.6-venv python3-tk
+RUN wget https://bootstrap.pypa.io/get-pip.py
+RUN python3.6 get-pip.py
+RUN ln -s -f /usr/bin/python3.6 /usr/local/bin/python3
+RUN ln -s -f /usr/local/bin/pip /usr/local/bin/pip3
+RUN pip3 install --upgrade pip
+
+# System upgrade
+RUN DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && apt-get dist-upgrade -y && apt-get autoremove -y
+
+# Git-lfs
+RUN build_deps="curl" && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps} ca-certificates && \
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git-lfs && \
+    git lfs install && \
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y --auto-remove ${build_deps} && \
+    rm -r /var/lib/apt/lists/*
+
+# Install PyCharm IDE into /opt
+RUN cd /opt \
+    && wget https://download.jetbrains.com/python/pycharm-community-2018.3.4.tar.gz \
+    && tar xvzf pycharm-community-2018.3.4.tar.gz \
+    && rm pycharm-community-2018.3.4.tar.gz
+
+# Install DataGrip IDE into /opt
+RUN cd /opt \
+    && wget https://download.jetbrains.com/datagrip/datagrip-2018.3.2.tar.gz \
+    && tar xvzf datagrip-2018.3.2.tar.gz \
+    && rm datagrip-2018.3.2.tar.gz
+
+# Install Cython
+RUN pip3 install Cython
+
+# Install Jupyter IDE
+RUN pip3 install jupyter
+RUN pip3 install ipywidgets
+RUN pip3 install livelossplot
+
+# Install scientific and data-wrangling packages
+RUN pip3 install numpy
+RUN pip3 install scipy
+RUN pip3 install pandas
+
+# Install SQL packages
+RUN pip3 install psycopg2
+RUN pip3 install sqlalchemy
+
+# Install visualization packages
+RUN pip3 install matplotlib
+RUN pip3 install seaborn
+RUN pip3 install graphviz
+RUN pip3 install plotly
+
+# Install ML libraries
+RUN pip3 install scikit-learn category_encoders
+RUN pip3 install xgboost
+RUN pip3 install torch torchvision pytorch-ignite torchsummary tensorboardx pretrainedmodels
+RUN pip3 install tensorflow-gpu keras deepreplay
+RUN pip3 install neptune-cli
+
+# Fixed version of pluggy for satisfying easyimages
+RUN pip3 install pluggy==0.6.0
+
+# Install CV packages
+RUN pip3 install scikit-image
+RUN pip3 install opencv-contrib-python
+RUN pip3 install albumentations
+RUN pip3 install easyimages
+
+# Install additional Cycle-GAN requirements
+RUN pip3 install dominate
+RUN pip3 install visdom

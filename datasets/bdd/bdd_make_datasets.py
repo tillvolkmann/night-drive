@@ -8,6 +8,23 @@ import warnings
 
 
 def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
+    """
+    Returns numbers of samples per timeofday x weather category for night-drive experimental data set designs.
+
+    :param cross_total: cross-tabulation (timeofday x weather) of all samples in database (needed to derive dists)
+    :param cross_avail: cross-tabulation (timeofday x weather) of samples still available.
+    :param sampler_dict:
+        "none":
+        "like-day-and-night":
+        "like-day":
+        "max-each": maximizes utilization of available originals for a given set, day and night independent.
+        "max-adjusted":
+        "max-adjusted-unequal":
+        "max-equal-rainsnow":
+    :param verbose:
+    :return:
+
+    """
     # initialize empty sampler table
     sampler_tab = cross_total.copy()
     sampler_tab[:] = 0
@@ -41,7 +58,7 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
         _dist_weather_classes.loc["daytime"] = cross_total.loc["daytime"].div(cross_total.loc["daytime"].sum(), axis=0)
         _dist_weather_classes.loc["night"] = _dist_weather_classes.loc["daytime"]
 
-    elif sampler_dict["balancing"] in ["max-each", "max-adjusted", "max-adjusted-unequal"]:
+    elif sampler_dict["balancing"] in ["max-each", "max-adjusted", "max-adjusted-unequal", "max-equal-rainsnow"]:
         # maximum balance within each time of day subgroup
         _dist_weather_classes = cross_total.copy()
         _dist_weather_classes[:] = 1 / _num_weather_classes
@@ -92,6 +109,14 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
                                                 cross_avail.loc["daytime"] * sampler_dict["class_dist"]["daytime"])
         sampler_tab.loc["night"] = np.minimum(sampler_tab.loc["night"],
                                               cross_avail.loc["night"] * sampler_dict["class_dist"]["night"] * 1 / 0.5)
+
+    if sampler_dict["balancing"] in ["max-equal-rainsnow"]:
+        comb_cross_avail = cross_avail.copy()
+        comb_cross_avail.loc[:, ["rainy", "snowy"]] = np.array(cross_avail.loc[:, ["rainy", "snowy"]].min(axis=0))
+        sampler_tab.loc["daytime"] = np.minimum(sampler_tab.loc["daytime"],
+                                                comb_cross_avail.loc["daytime"] * sampler_dict["class_dist"]["daytime"])
+        sampler_tab.loc["night"] = np.minimum(sampler_tab.loc["night"],
+                                              comb_cross_avail.loc["night"] * sampler_dict["class_dist"]["night"])
 
     # correct for actually available numbers
     if (sampler_tab > cross_avail).any().any():

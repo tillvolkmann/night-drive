@@ -4,3 +4,6 @@
 [submodule "detector/maskrcnn-benchmark"]
 	path = detector/maskrcnn-benchmark
 	url = https://github.com/facebookresearch/maskrcnn-benchmark.git
+[submodule "cycle-gan"]
+	path = gan/cycle-gan
+	url = https://github.com/tillvolkmann/pytorch-CycleGAN-and-pix2pix.git

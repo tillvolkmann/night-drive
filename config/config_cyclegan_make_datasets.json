@@ -1,0 +1,17 @@
+{
+    "root_dir": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k/bdd100k_sorted",
+    "database": "bdd_all",
+    "dropclass_dict": {"weather": ["undefined", "foggy"], "timeofday": ["undefined", "dawn/dusk"]},
+    "mergeclass_dict": {"weather": {"cloudy": ["overcast", "partly cloudy"]}},
+    "sampler_dict": {
+        "train_gan":   {"n": 18736,   "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "max-each",  "over": "after",  "class_min": 0},
+	"train_gan_alt2":   {"n": 82000,   "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "like-day",  "over": "before",  "class_min": 0},
+	"train_gan_alt3":   {"n": 82000,   "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "max-equal-rainsnow",  "over": "before",  "class_min": 0}
+    },
+    "destination_path": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k_sorted",
+    "destination_filename_stem": "bdd100k_sorted_cgan_",
+    "do_oversample_physically": "False",
+    "do_make_dirs": "True",
+    "do_copy_images": "True",
+    "do_balance_timeofday_after_oversampling": "True"
+}
