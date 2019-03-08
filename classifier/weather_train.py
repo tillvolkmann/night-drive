@@ -1,13 +1,15 @@
 import time
 import torch
-import neptune
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
-import datasets.bdd.BDDDataSets as bdd
+import datasets.bdd.BDDWeatherDataset as bdd
 import sklearn.metrics as metrics
+
+# Logging
+#import neptune
 #from tensorboardX import SummaryWriter
 
 
@@ -22,7 +24,7 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             accumulated_targets.extend(targets.detach().cpu().numpy().tolist())
-            accumulated_outputs.extend(np.argmax(outputs.detach().cpu().numpy().tolist(), axis=1))
+            accumulated_outputs.extend(np.argmax(outputs.detach().cpu().numpy().tolist(), axis = 1))
             if num_batches is not None and (i >= (num_batches - 1)):
                 break
         f1_score = metrics.f1_score(accumulated_targets, accumulated_outputs, average="weighted")
@@ -30,18 +32,20 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
     return f1_score
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    # get config
-    config_file = '../config_bdd_setA.json'
-    cfg = bdd.GetConfig(config_file)  # see docstring for info on available config files
+    # set data paths
+    path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/train_A"
+    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/annotations/bdd100k_sorted_train_A_over.json"
+    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/valid"
+    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/annotations/bdd100k_sorted_valid.json"
 
     # seeds
     torch.manual_seed(123)
     np.random.seed(123)
 
     # setup job monitoring on Neptune
-    ctx = neptune.Context()
+    #ctx = neptune.Context()
 
     # setup job monitoring on TensorBoardX
     #writer = SummaryWriter()
@@ -68,22 +72,18 @@ if __name__ == '__main__':
     }
 
     # create data sets
-    ds_train = bdd.WeatherClassifierDataset(cfg, split="train", transform=transform["train"])
-    ds_train_dev = bdd.WeatherClassifierDataset(cfg, split="train_dev", transform=transform["train"])
-    ds_valid = bdd.WeatherClassifierDataset(cfg, split="valid", transform=transform["valid"])
-    ds_test = bdd.WeatherClassifierDataset(cfg, split="test", transform=transform["valid"])
+    ds_train = bdd.BDDWeatherDataset(path_train_json, path_train_images, transform = transform["train"])
+    ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    dl_batch_size = 28
-    dl_num_workers = 8
+    dl_batch_size = 16#28
+    dl_num_workers = 2#8
     dl_shuffle = True
-    dl_train = torch.utils.data.DataLoader(ds_train, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
-    dl_train_dev = torch.utils.data.DataLoader(ds_train_dev, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
-    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
-    dl_test = torch.utils.data.DataLoader(ds_test, batch_size=dl_batch_size, shuffle=dl_shuffle, num_workers=dl_num_workers)
+    dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
+    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
 
     # create model
-    net = models.resnet50(pretrained=True)
+    net = models.resnet50(pretrained = True)
     net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
 
     # send model to device
@@ -158,11 +158,11 @@ if __name__ == '__main__':
                 running_loss_valid = 0.0
 
             # send to Neptune and TensorBoardX
-            ctx.channel_send('train_loss', i, loss.data.cpu().numpy())
+            #ctx.channel_send('train_loss', i, loss.data.cpu().numpy())
             #writer.add_scalar('train/loss', loss.data.cpu().numpy(), i)
-            if calc_valid_loss:
-                ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
-                # writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
+            #if calc_valid_loss:
+            #    ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
+            #    writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
 
     # f1-score on training set, validation set
     f1_train = evaluate_f1_score(net, dl_train)
