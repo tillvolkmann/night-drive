@@ -57,7 +57,8 @@ if __name__ == "__main__":
     calc_valid_loss = True
 
     # data transforms
-    t_target_size = (224, 224)
+    #t_target_size = (224, 224)
+    t_target_size = (720, 1280)
     t_norm_mean = [0.485, 0.456, 0.406]
     t_norm_std = [0.229, 0.224, 0.225]
     transform = {
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    dl_batch_size = 16#28
+    dl_batch_size = 1#28
     dl_num_workers = 2#8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -84,6 +85,7 @@ if __name__ == "__main__":
 
     # create model
     net = models.resnet50(pretrained = True)
+    net.avgpool = nn.AdaptiveAvgPool2d((1, 1))
     net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
 
     # send model to device
