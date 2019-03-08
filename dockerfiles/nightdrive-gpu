@@ -33,12 +33,6 @@ RUN cd /opt \
     && tar xvzf pycharm-community-2018.3.4.tar.gz \
     && rm pycharm-community-2018.3.4.tar.gz
 
-# Install DataGrip IDE into /opt
-RUN cd /opt \
-    && wget https://download.jetbrains.com/datagrip/datagrip-2018.3.2.tar.gz \
-    && tar xvzf datagrip-2018.3.2.tar.gz \
-    && rm datagrip-2018.3.2.tar.gz
-
 # Install Cython
 RUN pip3 install Cython
 
@@ -52,10 +46,6 @@ RUN pip3 install numpy
 RUN pip3 install scipy
 RUN pip3 install pandas
 
-# Install SQL packages
-RUN pip3 install psycopg2
-RUN pip3 install sqlalchemy
-
 # Install visualization packages
 RUN pip3 install matplotlib
 RUN pip3 install seaborn
@@ -64,9 +54,7 @@ RUN pip3 install plotly
 
 # Install ML libraries
 RUN pip3 install scikit-learn category_encoders
-RUN pip3 install xgboost
 RUN pip3 install torch torchvision pytorch-ignite torchsummary tensorboardx pretrainedmodels
-RUN pip3 install tensorflow-gpu keras deepreplay
 RUN pip3 install neptune-cli
 
 # Fixed version of pluggy for satisfying easyimages
@@ -81,3 +69,4 @@ RUN pip3 install easyimages
 # Install additional Cycle-GAN requirements
 RUN pip3 install dominate
 RUN pip3 install visdom
+
