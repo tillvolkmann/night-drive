@@ -7,12 +7,12 @@ from torch.utils.data import Dataset
 class BDDWeatherDataset(Dataset):
 
     """ Constructor """
-    def __init__(self, bdd_json_path, bdd_image_path, transform = None, augment = None, dropcls = [None]):
+    def __init__(self, bdd_json_path, bdd_image_path, transform = None, augment = None, drop_cls = [None], force_num = None):
         self.bdd_json_path = bdd_json_path
         self.bdd_image_path = bdd_image_path
         self.transform = transform
         self.augment = augment
-        self.data = self._load_data(dropcls)
+        self.data = self._load_data(drop_cls, force_num)
         self.class_dict = dict(zip(list(np.sort(self.data.weather.unique())), list(range(self._get_num_classes()))))
 
     """ Provides the size of the dataset """
@@ -56,7 +56,7 @@ class BDDWeatherDataset(Dataset):
         return self.class_dict
 
     """ Read Berkeley Deep Drive label json. """
-    def _load_data(self, dropcls):
+    def _load_data(self, drop_cls, force_num):
         # load annotation file
         data = pd.read_json(self.bdd_json_path)
         print(f">> Loading BDD data from {self.bdd_json_path}...")
@@ -68,6 +68,19 @@ class BDDWeatherDataset(Dataset):
         # drop other columns
         data = data.drop(columns = ["labels", "timestamp", "attributes"])
         # drop samples with unwanted classes
-        data = data.loc[~data.weather.isin(dropcls)]
+        data = data.loc[~data.weather.isin(drop_cls)]
         data = data.sample(frac = 1, random_state = 123).reset_index(drop = True)
+        # balance classes to fixed number
+        if force_num is not None:
+            data_balanced = pd.DataFrame()
+            for weather, count in data.loc[:, "weather"].value_counts().to_dict().items():
+                if force_num >= count:
+                    orig = data.loc[data.weather == weather]
+                    # sample with replacement
+                    over = orig.iloc[np.random.randint(0, orig.shape[0], size = force_num - orig.shape[0])]
+                    data_balanced = pd.concat([data_balanced, orig, over], axis = 0)
+                else:
+                    orig = data.loc[data.weather == weather].iloc[0:force_num]
+                    data_balanced = pd.concat([data_balanced, orig], axis = 0)
+            data = data_balanced.reset_index(drop = True)
         return data

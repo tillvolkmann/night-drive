@@ -35,10 +35,10 @@ def evaluate_f1_score(net, data_loader, num_batches = None):
 if __name__ == "__main__":
 
     # set data paths
-    path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/train_A"
-    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/annotations/bdd100k_sorted_train_A_over.json"
-    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/valid"
-    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted/annotations/bdd100k_sorted_valid.json"
+    path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_A"
+    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations_bdd_format/bdd100k_sorted_train_A_over.json"
+    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid"
+    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations_bdd_format/bdd100k_sorted_valid.json"
 
     # seeds
     torch.manual_seed(123)
@@ -51,10 +51,11 @@ if __name__ == "__main__":
     #writer = SummaryWriter()
 
     # setting device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = "cpu"
 
     # show validation loss
-    calc_valid_loss = True
+    calc_valid_loss = False
 
     # data transforms
     #t_target_size = (224, 224)
@@ -77,8 +78,8 @@ if __name__ == "__main__":
     ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    dl_batch_size = 1#28
-    dl_num_workers = 2#8
+    dl_batch_size = 4#28
+    dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
     dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -102,6 +103,9 @@ if __name__ == "__main__":
 
     # log every n mini batches
     log_step = 1
+
+    # save every m epochs
+    epoch_save_step = 5
 
     tic = time.time()
 
@@ -149,12 +153,14 @@ if __name__ == "__main__":
 
             # print statistics
             if (i + 1) % log_step == 0: # print every log_step mini-batches
-                eta = (((time.time() - tic) / (epoch + 1)) * (num_epochs - (epoch + 1))) / 3600.0
+                num_batches_done = epoch * len(dl_train) + i + 1
+                num_batches_remaining = num_epochs * len(dl_train) - num_batches_done
+                eta = (((time.time() - tic) / num_batches_done) * num_batches_remaining) / 3600              
                 if calc_valid_loss:
-                    print(f"Epoch {epoch + 1}, Batch {i + 1}: Train Loss = {(running_loss_train / log_step):.3f} "
+                    print(f"Epoch {epoch + 1}/{num_epochs}, Batch {i + 1}/{len(dl_train)}: Train Loss = {(running_loss_train / log_step):.3f} "
                           f"Valid Loss = {(running_loss_valid / log_step):.3f} ETA = {eta:.2f}h")
                 else:
-                    print(f"Epoch {epoch + 1}, Batch {i + 1}: Train Loss = {(running_loss_train / log_step):.3f} "
+                    print(f"Epoch {epoch + 1}/{num_epochs}, Batch {i + 1}/{len(dl_train)}: Train Loss = {(running_loss_train / log_step):.3f} "
                           f"ETA = {eta:.2f}h")
                 running_loss_train = 0.0
                 running_loss_valid = 0.0
@@ -166,20 +172,22 @@ if __name__ == "__main__":
             #    ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
             #    writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
 
-    # f1-score on training set, validation set
-    f1_train = evaluate_f1_score(net, dl_train)
-    f1_valid = evaluate_f1_score(net, dl_valid)
-    print(f"F1-Score after {num_epochs} epochs: Training = {f1_train:.2f} Validation = {f1_valid:.2f}")
+        # f1-score on training set, validation set
+        #f1_train = evaluate_f1_score(net, dl_train)
+        #f1_valid = evaluate_f1_score(net, dl_valid)
+        #print(f"F1-Score after {epoch + 1} epochs: Training = {f1_train:.2f} Validation = {f1_valid:.2f}")
 
-    # save final model
-    torch.save({
-        'epochs': num_epochs,
-        'model_state_dict': net.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'train_loss': loss.data.cpu().numpy(),
-        'train_f1': f1_train,
-        'valid_f1': f1_valid
-    }, './resnet50_weather_classifier.pth')
+        # save model
+        if ((epoch + 1) % epoch_save_step == 0) or (epoch + 1) == num_epochs: # save every epoch_save_step epochs
+            torch.save({
+                "epochs": epoch + 1,
+                "model_state_dict": net.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "train_loss": loss.data.cpu().numpy(),
+                #"train_f1": f1_train,
+                #"valid_f1": f1_valid
+            }, f"./resnet50_weather_classifier_epoch_{epoch + 1}.pth")
 
     # close TensorBoardX
     #writer.close()
+

@@ -144,7 +144,9 @@ if __name__ == '__main__':
 
             # print statistics
             if (i + 1) % log_step == 0: # print every log_step mini-batches
-                eta = (((time.time() - tic) / (epoch + 1)) * (num_epochs - (epoch + 1))) / 3600.0
+                num_batches_done = epoch * len(dl_train) + i + 1
+                num_batches_remaining = num_epochs * len(dl_train) - num_batches_done
+                eta = (((time.time() - tic) / num_batches_done) * num_batches_remaining) / 3600
                 if calc_valid_loss:
                     print(f"Epoch {epoch + 1}, Batch {i + 1}: Train Loss = {(running_loss_train / log_step):.3f} "
                           f"Valid Loss = {(running_loss_valid / log_step):.3f} ETA = {eta:.2f}h")
