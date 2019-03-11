@@ -58,7 +58,9 @@ if __name__ == "__main__":
 
     # data transforms
     #t_target_size = (224, 224) # default resolution
-    t_target_size = (720, 1280) # full bdd resolution
+    #t_target_size = (720, 1280) # full bdd resolution
+    t_target_size = (448, 448)
+    #t_target_size = (672, 672)
     t_norm_mean = [0.485, 0.456, 0.406]
     t_norm_std = [0.229, 0.224, 0.225]
     transform = {
@@ -77,7 +79,9 @@ if __name__ == "__main__":
     ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    dl_batch_size = 6
+    #dl_batch_size = 32
+    #dl_batch_size = 6
+    dl_batch_size = 24
     dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -95,13 +99,17 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.001)
+    optimizer = optim.Adam(net.parameters(), lr = 0.001)
+
+    # scheduler
+    lr_step_size = 25
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size = lr_step_size, gamma = 0.1)
 
     # number of epochs
-    num_epochs = 50
+    num_epochs = 100
 
     # log every n mini batches
-    log_step = 1
+    log_step = 10
 
     # save every m epochs
     epoch_save_step = 1
@@ -113,6 +121,9 @@ if __name__ == "__main__":
         running_loss_train = 0.0
         running_loss_valid = 0.0
         data_valid = iter(dl_valid)
+
+        # update the learning rate
+        lr_scheduler.step()
 
         for i, data in enumerate(dl_train, 0):
 
@@ -154,7 +165,7 @@ if __name__ == "__main__":
             if (i + 1) % log_step == 0: # print every log_step mini-batches
                 num_batches_done = epoch * len(dl_train) + i + 1
                 num_batches_remaining = num_epochs * len(dl_train) - num_batches_done
-                eta = (((time.time() - tic) / num_batches_done) * num_batches_remaining) / 3600              
+                eta = (((time.time() - tic) / num_batches_done) * num_batches_remaining) / 3600
                 if calc_valid_loss:
                     print(f"Epoch {epoch + 1}/{num_epochs}, Batch {i + 1}/{len(dl_train)}: Train Loss = {(running_loss_train / log_step):.3f} "
                           f"Valid Loss = {(running_loss_valid / log_step):.3f} ETA = {eta:.2f}h")
