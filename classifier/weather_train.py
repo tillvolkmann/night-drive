@@ -36,9 +36,9 @@ if __name__ == "__main__":
 
     # set data paths
     path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_A"
-    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations_bdd_format/bdd100k_sorted_train_A_over.json"
+    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_A_over.json"
     path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid"
-    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations_bdd_format/bdd100k_sorted_valid.json"
+    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid.json"
 
     # seeds
     torch.manual_seed(123)
@@ -51,15 +51,14 @@ if __name__ == "__main__":
     #writer = SummaryWriter()
 
     # setting device
-    #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = "cpu"
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # show validation loss
     calc_valid_loss = False
 
     # data transforms
-    #t_target_size = (224, 224)
-    t_target_size = (720, 1280)
+    #t_target_size = (224, 224) # default resolution
+    t_target_size = (720, 1280) # full bdd resolution
     t_norm_mean = [0.485, 0.456, 0.406]
     t_norm_std = [0.229, 0.224, 0.225]
     transform = {
@@ -78,7 +77,7 @@ if __name__ == "__main__":
     ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    dl_batch_size = 4#28
+    dl_batch_size = 6
     dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -96,16 +95,16 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.Adam(net.parameters())
+    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.001)
 
     # number of epochs
-    num_epochs = 100
+    num_epochs = 50
 
     # log every n mini batches
     log_step = 1
 
     # save every m epochs
-    epoch_save_step = 5
+    epoch_save_step = 1
 
     tic = time.time()
 
@@ -184,10 +183,10 @@ if __name__ == "__main__":
                 "model_state_dict": net.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "train_loss": loss.data.cpu().numpy(),
+                "dataset": path_train_json,
                 #"train_f1": f1_train,
                 #"valid_f1": f1_valid
             }, f"./resnet50_weather_classifier_epoch_{epoch + 1}.pth")
 
     # close TensorBoardX
     #writer.close()
-
