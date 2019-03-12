@@ -54,7 +54,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # show validation loss
-    calc_valid_loss = False
+    calc_valid_loss = True
 
     # data transforms
     #t_target_size = (224, 224) # default resolution
@@ -81,7 +81,8 @@ if __name__ == "__main__":
     # data loader
     #dl_batch_size = 32
     #dl_batch_size = 6
-    dl_batch_size = 24
+    #dl_batch_size = 24 # 448 x 448 without valid
+    dl_batch_size = 12 # 448 x 448 with valid
     dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -154,7 +155,11 @@ if __name__ == "__main__":
             # calculate validation loss
             if calc_valid_loss:
                 net.eval()
-                inputs_valid, targets_valid = next(data_valid)
+                try:
+                    inputs_valid, targets_valid = next(data_valid)
+                except StopIteration:
+                    data_valid = iter(dl_valid)
+                    inputs_valid, targets_valid = next(data_valid)
                 inputs_valid, targets_valid = inputs_valid.to(device), targets_valid.to(device)
                 outputs_valid = net(inputs_valid)
                 loss_valid = criterion(outputs_valid, targets_valid)
