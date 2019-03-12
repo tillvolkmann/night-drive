@@ -37,8 +37,10 @@ if __name__ == "__main__":
     # set data paths
     path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_A"
     path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_A_over.json"
-    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid"
-    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid.json"
+    #path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid"
+    #path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid.json"
+    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_dev_A"
+    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_dev_A_over.json"
 
     # seeds
     torch.manual_seed(123)
@@ -82,14 +84,16 @@ if __name__ == "__main__":
     #dl_batch_size = 32
     #dl_batch_size = 6
     #dl_batch_size = 24 # 448 x 448 without valid
-    dl_batch_size = 12 # 448 x 448 with valid
+    #dl_batch_size = 12 # 448 x 448 with valid
+    dl_batch_size = 32
     dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
     dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
 
     # create model
-    net = models.resnet50(pretrained = True)
+    #net = models.resnet50(pretrained = True)
+    net = models.resnet18(pretrained = True)
     net.avgpool = nn.AdaptiveAvgPool2d((1, 1))
     net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
 
@@ -100,11 +104,11 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.Adam(net.parameters(), lr = 0.001)
+    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.001)
 
     # scheduler
-    lr_step_size = 25
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size = lr_step_size, gamma = 0.1)
+    lr_step_size = 2
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size = lr_step_size, gamma = 0.95)
 
     # number of epochs
     num_epochs = 100
