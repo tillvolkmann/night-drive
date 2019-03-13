@@ -14,7 +14,7 @@
     "destination_path": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k_sorted",
     "destination_filename_stem": "bdd100k_sorted_",
     "do_oversample_physically": "False",
-    "do_make_dirs": "True",
-    "do_copy_images": "True",
+    "do_make_dirs": "False",
+    "do_copy_images": "False",
     "do_balance_timeofday_after_oversampling": "True"
 }
