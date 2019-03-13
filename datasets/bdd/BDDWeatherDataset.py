@@ -59,6 +59,7 @@ class BDDWeatherDataset(Dataset):
     def _load_data(self, drop_cls, force_num):
         # load annotation file
         data = pd.read_json(self.bdd_json_path)
+        data = data.reset_index(drop = True)
         print(f">> Loading BDD data from {self.bdd_json_path}...")
         # complete path, since only images names in label file
         sep = "" if self.bdd_image_path[-1] == "/" else "/"

@@ -12,6 +12,9 @@ import sklearn.metrics as metrics
 #import neptune
 #from tensorboardX import SummaryWriter
 
+# setting device
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 def evaluate_f1_score(net, data_loader, num_batches = None):
     # f1 score: https://scikit-learn.org/stable/modules/model_evaluation.html#from-binary-to-multiclass-and-multilabel
@@ -52,9 +55,6 @@ if __name__ == "__main__":
     # setup job monitoring on TensorBoardX
     #writer = SummaryWriter()
 
-    # setting device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
     # show validation loss
     calc_valid_loss = True
 
@@ -69,11 +69,11 @@ if __name__ == "__main__":
         "train": transforms.Compose([
             transforms.Resize(t_target_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=t_norm_mean, std=t_norm_std)]),  # ImageNet
+            transforms.Normalize(mean = t_norm_mean, std = t_norm_std)]), # ImageNet
         "valid": transforms.Compose([
             transforms.Resize(t_target_size),
             transforms.ToTensor(),
-            transforms.Normalize(mean=t_norm_mean, std=t_norm_std)])  # ImageNet
+            transforms.Normalize(mean = t_norm_mean, std = t_norm_std)]) # ImageNet
     }
 
     # create data sets
@@ -81,11 +81,10 @@ if __name__ == "__main__":
     ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
 
     # data loader
-    #dl_batch_size = 32
-    #dl_batch_size = 6
-    #dl_batch_size = 24 # 448 x 448 without valid
-    #dl_batch_size = 12 # 448 x 448 with valid
     dl_batch_size = 32
+    #dl_batch_size = 6 # ResNet50, 1280 x 720 without valid
+    #dl_batch_size = 24 # ResNet50, 448 x 448 without valid
+    #dl_batch_size = 12 # ResNet50, 448 x 448 with valid
     dl_num_workers = 8
     dl_shuffle = True
     dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
@@ -104,7 +103,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.001)
+    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.01)
 
     # scheduler
     lr_step_size = 2
@@ -206,7 +205,7 @@ if __name__ == "__main__":
                 "dataset": path_train_json,
                 #"train_f1": f1_train,
                 #"valid_f1": f1_valid
-            }, f"./resnet50_weather_classifier_epoch_{epoch + 1}.pth")
+            }, f"./resnet18_weather_classifier_epoch_{epoch + 1}.pth")
 
     # close TensorBoardX
     #writer.close()
