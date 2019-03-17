@@ -1,17 +1,15 @@
-import os
+import cv2
 import numpy as np
 import pandas as pd
-from PIL import Image
 from torch.utils.data import Dataset
 
 class BDDWeatherDataset(Dataset):
 
     """ Constructor """
-    def __init__(self, bdd_json_path, bdd_image_path, transform = None, augment = None, drop_cls = [None], force_num = None):
+    def __init__(self, bdd_json_path, bdd_image_path, transform = None, drop_cls = [None], force_num = None):
         self.bdd_json_path = bdd_json_path
         self.bdd_image_path = bdd_image_path
         self.transform = transform
-        self.augment = augment
         self.data = self._load_data(drop_cls, force_num)
         self.class_dict = dict(zip(list(np.sort(self.data.weather.unique())), list(range(self._get_num_classes()))))
 
@@ -24,18 +22,20 @@ class BDDWeatherDataset(Dataset):
         # load image and target
         img = self._load_image(ix)
         target = self.class_dict[self._get_target(ix)]
-        # transform images
+        # transform image
         if self.transform is not None:
-            img = self.transform(img)
-        # augment image
-        if self.augment is not None:
-            img = self.augment(img)
+            transformed = self.transform(image = img)
+            img = transformed['image']
         return img, target
 
     """ Load one image from disk as PIL image """
     def _load_image(self, ix):
         img_path = self.data.name[ix]
-        img = Image.open(img_path)
+        # Read an image with OpenCV
+        img = cv2.imread(img_path)
+        # By default OpenCV uses BGR color space for color images,
+        # so we need to convert the image to RGB color space.
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
 
     """ Get one target (weather classification) """
