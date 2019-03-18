@@ -1,12 +1,15 @@
+import os
 import time
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
-import torchvision.transforms as transforms
 import datasets.bdd.BDDWeatherDataset as bdd
 import sklearn.metrics as metrics
+import albumentations.augmentations.transforms as transforms
+from albumentations import Compose
+from albumentations.pytorch import ToTensor
 
 # Logging
 #import neptune
@@ -40,8 +43,6 @@ if __name__ == "__main__":
     # set data paths
     path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_A"
     path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_A_over.json"
-    #path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid"
-    #path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid.json"
     path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_dev_A"
     path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_dev_A_over.json"
 
@@ -59,41 +60,38 @@ if __name__ == "__main__":
     calc_valid_loss = True
 
     # data transforms
-    #t_target_size = (224, 224) # default resolution
-    #t_target_size = (720, 1280) # full bdd resolution
     t_target_size = (448, 448)
-    #t_target_size = (672, 672)
-    t_norm_mean = [0.485, 0.456, 0.406]
-    t_norm_std = [0.229, 0.224, 0.225]
+    t_norm_mean = [0.485, 0.456, 0.406] # ImageNet
+    t_norm_std = [0.229, 0.224, 0.225] # ImageNet
     transform = {
-        "train": transforms.Compose([
-            transforms.Resize(t_target_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean = t_norm_mean, std = t_norm_std)]), # ImageNet
-        "valid": transforms.Compose([
-            transforms.Resize(t_target_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean = t_norm_mean, std = t_norm_std)]) # ImageNet
+        "train": Compose([
+            transforms.RandomBrightnessContrast(brightness_limit = 0.2, contrast_limit = 0.2, p = 0.5),
+            transforms.MedianBlur(blur_limit = 3, p = 0.5),
+            transforms.GaussNoise(var_limit = (1.0, 50.0), p = 0.5),
+            transforms.HorizontalFlip(p = 0.5),
+            transforms.RandomSizedCrop(min_max_height = (t_target_size[0] // 2, t_target_size[0]), height = t_target_size[0], width = t_target_size[1], w2h_ratio = 1.777778),
+            transforms.Resize(height = t_target_size[0], width = t_target_size[1]),
+            ToTensor(normalize = {"mean": t_norm_mean, "std": t_norm_std})]),
+        "valid": Compose([
+            transforms.Resize(height = t_target_size[0], width = t_target_size[1]),
+            ToTensor(normalize = {"mean": t_norm_mean, "std": t_norm_std})])
     }
 
     # create data sets
-    ds_train = bdd.BDDWeatherDataset(path_train_json, path_train_images, transform = transform["train"])
-    ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
+    ds_train = bdd.BDDWeatherDataset(path_train_json, path_train_images, transform = transform["train"], drop_cls = ["cloudy"])
+    ds_valid = bdd.BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"], drop_cls = ["cloudy"])
 
     # data loader
     dl_batch_size = 32
-    #dl_batch_size = 6 # ResNet50, 1280 x 720 without valid
-    #dl_batch_size = 24 # ResNet50, 448 x 448 without valid
-    #dl_batch_size = 12 # ResNet50, 448 x 448 with valid
-    dl_num_workers = 8
+    dl_num_workers_train = 10
+    dl_num_workers_valid = 6
     dl_shuffle = True
-    dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
-    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers)
+    dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers_train)
+    dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers_valid)
 
     # create model
-    #net = models.resnet50(pretrained = True)
     net = models.resnet18(pretrained = True)
-    net.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+    net.avgpool = nn.AdaptiveAvgPool2d((1, 1)) # Needed for resolutions > 224 x 224
     net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
 
     # send model to device
@@ -103,14 +101,10 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
 
     # optimizer
-    optimizer = optim.Adam(net.parameters(), lr = 0.0001, weight_decay = 0.01)
-
-    # scheduler
-    lr_step_size = 2
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size = lr_step_size, gamma = 0.95)
+    optimizer = optim.Adam(net.parameters(), lr = 0.0001)
 
     # number of epochs
-    num_epochs = 100
+    num_epochs = 20
 
     # log every n mini batches
     log_step = 10
@@ -125,9 +119,6 @@ if __name__ == "__main__":
         running_loss_train = 0.0
         running_loss_valid = 0.0
         data_valid = iter(dl_valid)
-
-        # update the learning rate
-        lr_scheduler.step()
 
         for i, data in enumerate(dl_train, 0):
 
@@ -190,11 +181,6 @@ if __name__ == "__main__":
             #    ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
             #    writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
 
-        # f1-score on training set, validation set
-        #f1_train = evaluate_f1_score(net, dl_train)
-        #f1_valid = evaluate_f1_score(net, dl_valid)
-        #print(f"F1-Score after {epoch + 1} epochs: Training = {f1_train:.2f} Validation = {f1_valid:.2f}")
-
         # save model
         if ((epoch + 1) % epoch_save_step == 0) or (epoch + 1) == num_epochs: # save every epoch_save_step epochs
             torch.save({
@@ -202,10 +188,7 @@ if __name__ == "__main__":
                 "model_state_dict": net.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "train_loss": loss.data.cpu().numpy(),
-                "dataset": path_train_json,
-                #"train_f1": f1_train,
-                #"valid_f1": f1_valid
-            }, f"./resnet18_weather_classifier_epoch_{epoch + 1}.pth")
+            }, f"./resnet18_weather_classifier_{path_train_json.split(os.sep)[-1].split('_sorted')[-1].split('.json')[0]}_epoch_{epoch + 1}.pth")
 
     # close TensorBoardX
     #writer.close()
