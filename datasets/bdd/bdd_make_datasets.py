@@ -47,7 +47,8 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
         _dist_weather_classes = cross_total.div(cross_total.sum(axis=1), axis=0)
 
     elif sampler_dict["balancing"] == "like-day-and-night":
-        # day and night eq to their combined dist (note this is not weightes by number of samples among timeofday categories, i.e. the weather dists during day and night have equal weight)
+        # day and night eq to their combined dist (note this is not weightes by number of samples among timeofday
+        # categories, i.e. the weather dists during day and night have equal weight)
         _dist_weather_classes = cross_total.copy()
         _dist_weather_classes.loc["daytime"] = cross_total.div(cross_total.sum(axis=1), axis=0).mean(axis=0)
         _dist_weather_classes.loc["night"] = _dist_weather_classes.loc["daytime"]
@@ -68,18 +69,21 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
     #     "over": "before" ~ assumes oversampling before counting
     #     "over": "after" ~ assumes oversampling after counting
     if sampler_dict["over"] == "before":
-        # assumes oversampling is done before sample collection; i.e., split set will have specified fraction of "resampled" images of each timeofday
+        # assumes oversampling is done before sample collection; i.e., split set will have specified fraction of
+        # "resampled" images of each timeofday
         for tod in _timeofday_classes:
             # get target number of samples per weather class (after oversampling)
             _class_size = sampler_dict["n"] * sampler_dict["class_dist"][tod] / _num_weather_classes
             # get num of original images to draw to match class target size and specified distibution
             _num_originals = _class_size * _dist_weather_classes.loc[tod] / _dist_weather_classes.loc[
-                tod].max()  # note the scaling of the weather dist to a [0 1] range, so that the max class exactly fills the target while preserving the desired distribution
+                tod].max()  # note the scaling of the weather dist to a [0 1] range, so that the max class exactly fills
+            # the target while preserving the desired distribution
             # assign to sampler table (accounting for already assigned data from thresholding)
             sampler_tab.loc[tod] = np.maximum(sampler_tab.loc[tod], _num_originals)
 
     elif sampler_dict["over"] in ["none", "after"]:
-        # assumes oversampling is done after sample collection; i.e., split set will have specified fraction of "unqiue" images of each timeofday
+        # assumes oversampling is done after sample collection; i.e., split set will have specified fraction of "unqiue"
+        # images of each timeofday
         for tod in _timeofday_classes:
             print(_dist_weather_classes.loc[tod])
             _num_originals = sampler_dict["n"] * sampler_dict["class_dist"][tod] * _dist_weather_classes.loc[tod]
@@ -98,7 +102,8 @@ def stratified_sampler(cross_total, cross_avail, sampler_dict, verbose=1):
             sampler_tab.loc[tod] = np.maximum(sampler_tab.loc[tod], _num_originals)
 
     # max balancing but adjust so that proportions among sets of different sizes (e.g. 25% night and 50%) are preserved
-    # "max-adjusted" preserves with respect to 100% sample size, while "max-adjusted-unequal" preserves with respect to the max percentage sample size in the experiment (i.e. 50% night)
+    # "max-adjusted" preserves with respect to 100% sample size, while "max-adjusted-unequal" preserves with respect to
+    # the max percentage sample size in the experiment (i.e. 50% night)
     if sampler_dict["balancing"] in ["max-adjusted"]:
         sampler_tab.loc["daytime"] = np.minimum(sampler_tab.loc["daytime"],
                                                 cross_avail.loc["daytime"] * sampler_dict["class_dist"]["daytime"])

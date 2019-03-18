@@ -1,0 +1,8 @@
+
+
+=============================================
+TESTING INTEGRITY OF SPLIT train_A
+>> Loading train_A label data set
+/bdd100k_sorted/train_A
+
+Performing check on class agreement with original data set
