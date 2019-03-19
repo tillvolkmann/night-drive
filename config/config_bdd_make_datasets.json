@@ -1,5 +1,5 @@
 {
-    "root_dir": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k",
+    "root_dir": "/home/till/SharedFolder/CurrentDatasets/bdd100k",
     "database": "bdd_all",
     "dropclass_dict": {"weather": ["undefined", "foggy"], "timeofday": ["undefined", "dawn/dusk"]},
     "mergeclass_dict": {"weather": {"cloudy": ["overcast", "partly cloudy"]}},
@@ -11,7 +11,7 @@
         "test":      {"n": 2000,    "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "none",  "over": "none", "class_min": 50}
     },
     "train_dev_n": 2000,
-    "destination_path": "/home/till/data/driving/BerkeleyDeepDrive/bdd100k_sorted",
+    "destination_path": "/home/till/SharedFolder/CurrentDatasets/bdd100k_sorted",
     "destination_filename_stem": "bdd100k_sorted_",
     "do_oversample_physically": "False",
     "do_make_dirs": "False",

@@ -63,32 +63,60 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show=T
         ncol = max_ncol
         nrow = int(math.ceil(n_img / ncol))
 
-    print(nrow, ncol)
-
     figh = nrow * 3
     figw = ncol * 3 * (16 / 9)
     fig, ax = plt.subplots(nrow, ncol,
                            figsize=[figw, figh], gridspec_kw={'wspace':0.03, 'hspace':0.03}, squeeze=True)
+    
     # Plot images
-    for c in range(n_img):
-        row = c // ncol
-        col = c % ncol
-        # load image
-        img = mpimg.imread(names[c])
-        # plot
-        imgplot = ax[row, col].imshow(img, interpolation="none")
-        #
-        xytext_base = (2,3)
-        if print_name is True:
-            name = os.path.basename(names[c])
-            ax[row, col].annotate(name, (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
-            xytext_base = (2,17)
-        if labels is not None:
-            ax[row, col].annotate(str(labels[c]), (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+    # for c in range(n_img):
+    #     row = c // ncol
+    #     col = c % ncol
+    #     # load image
+    #     img = mpimg.imread(names[c])
+    #     # plot
+    #     imgplot = ax[row, col].imshow(img, interpolation="none")
+    #     #
+    #     xytext_base = (2,3)
+    #     if print_name is True:
+    #         name = os.path.basename(names[c])
+    #         ax[row, col].annotate(name, (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+    #         xytext_base = (2,17)
+    #     if labels is not None:
+    #         ax[row, col].annotate(str(labels[c]), (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+    #     # style
+    #     ax[row, col].set_xticks([])
+    #     ax[row, col].set_yticks([])
 
-        # style
-        ax[row, col].set_xticks([])
-        ax[row, col].set_yticks([])
+    # Plot images
+    c = 0
+    for row in range(nrow):
+        for col in range(ncol):
+            
+            if c < n_img:
+                # load image
+                img = mpimg.imread(names[c])
+                # plot
+                imgplot = ax[row, col].imshow(img, interpolation="none")
+                #
+                xytext_base = (2,3)
+                if print_name is True:
+                    name = os.path.basename(names[c])
+                    ax[row, col].annotate(name, (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+                    xytext_base = (2,17)
+                if labels is not None:
+                    ax[row, col].annotate(str(labels[c]), (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+                # style
+                ax[row, col].set_xticks([])
+                ax[row, col].set_yticks([])
+                # ax[row, col].set_frame_off
+            else:
+                # style
+                ax[row, col].set_xticks([])
+                ax[row, col].set_yticks([])
+                # ax[row, col].set_axis_off
+
+            c += 1
 
     # add title to figure
     if fig_title is not None:

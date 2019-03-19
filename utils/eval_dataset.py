@@ -11,14 +11,20 @@ class EvalDataset():
     """
     def __init__(self, root_dir, database=None):
         """ Constructor """
+        #
         self.root_dir = root_dir
         self.database = database
+        #
         self.list_splits = ["train_A", "train_B", "train_C", "train_dev_A", "train_dev_B", "train_dev_C", "valid", "test"]
         self.list_splits_over = ["train_A_over", "train_B_over", "train_C_over", "train_dev_A_over", "train_dev_B_over", "train_dev_C_over"]
-        print("AAaaa")
-        self.data, self.image_base_path = self._load_data()
+        #
+        self.data, self.image_base_path = self._load_data()  #
+        #
         # self.dict_weather_classes = self._set_weather_class_dict()
         # self.dict_timeofday_classes = self._set_timeofday_class_dict()
+        #
+        self.list_weather = sorted(self.data.weather.unique().tolist())
+        self.list_timeofday = sorted(self.data.timeofday.unique().tolist())
 
         # remove unneeded data
         # self.data = self._tidy_data()
@@ -47,53 +53,57 @@ class EvalDataset():
         """
         # Load databases
         data = pd.DataFrame()
-        print(">> Loading {} label data set".format(self.database))
-        print(self.database)
-        if any([x == self.database for x in ['bdd_train', 'bdd_all']]):            # training set
-            # read data annotations json
-            data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k/labels/bdd100k_labels_images_train.json"))
-            # concat paths to images, since different for training and val set
-            image_base_path = os.path.join(self.root_dir, "/images/100k/train/")
-            data_new["name"] = image_base_path + data_new["name"].astype(str)
-            print("A")
-        if any([x==self.database for x in ['bdd_valid', 'bdd_all']]):       # validation set
-            # read data annotations json
-            data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k/labels/bdd100k_labels_images_val.json"))
-            # concat paths to images, since different for training and val set
-            image_base_path = os.path.join(self.root_dir, "/images/100k/val/")
-            data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
-            print("AA")
-        if any([x == self.database for x in self.list_splits]):
-            # read data annotations json
-            filename = "bdd100k_sorted_" + self.database + ".json"
-            data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k_sorted/annotations/"+filename))
-            # concat paths to images, since different for training and val set
-            image_base_path = os.path.join(self.root_dir, "/bdd100k_sorted/", self.database)
-            data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
-            print("AA")
-        if any([x == self.database for x in self.list_splits_over]):
-            # read data annotations json
-            filename = "bdd100k_sorted_" + self.database + ".json"
-            data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k_sorted/annotations/", filename))
-            # concat paths to images, since different for training and val set
-            image_base_path = os.path.join(self.root_dir, "/bdd100k_sorted/", self.database[:-5])
-            data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
-            print("AA")
-        print("AAAAAAAAAAAAAA")
+        if isinstance(self.database, str):
+            self.database = list([self.database])
+        for split in self.database:
+            print(">> Loading annotations for data set '{}' ...".format(split))
+            # print(type(split))
+            # print(split)
+            if any([x == split for x in ['bdd_train', 'bdd_all']]):            # training set
+                # read data annotations json
+                data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k/labels/bdd100k_labels_images_train.json"))
+                # concat paths to images, since different for training and val set
+                image_base_path = os.path.join(self.root_dir, "images/100k/train/")
+                data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
+                print("A")
+            elif any([x == split for x in ['bdd_valid', 'bdd_all']]):       # validation set
+                # read data annotations json
+                data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k/labels/bdd100k_labels_images_val.json"))
+                # concat paths to images, since different for training and val set
+                image_base_path = os.path.join(self.root_dir, "images/100k/val/")
+                data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
+                print("AA")
+            elif any([x == split for x in self.list_splits]):
+                # read data annotations json
+                filename = "bdd100k_sorted_" + split + ".json"
+                data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k_sorted/annotations/"+filename))
+                # concat paths to images, since different for training and val set
+                image_base_path = os.path.join(self.root_dir, "bdd100k_sorted/", split)
+                data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
+                print("AA")
+            elif any([x == split for x in self.list_splits_over]):
+                # read data annotations json
+                filename = "bdd100k_sorted_" + split + ".json"
+                data_new = pd.read_json(os.path.join(self.root_dir, "bdd100k_sorted/annotations/", filename))
+                # concat paths to images, since different for training and val set
+                image_base_path = os.path.join(self.root_dir, "bdd100k_sorted/", split[:-5])
+                data_new["name"] = image_base_path + "/" + data_new["name"].astype(str)
+                print("AA")
 
-        print(image_base_path)
-        data = pd.concat([data, data_new], axis=0)
+            data = pd.concat([data, data_new], axis=0)
 
         # Simplify data structure
         data['weather'] = data.attributes.apply(lambda x: x['weather'])
         data['timeofday'] = data.attributes.apply(lambda x: x['timeofday'])
         data['scene'] = data.attributes.apply(lambda x: x['scene'])
-
-        # Remove unneeded / obsolete columns
+        # Remove unneeded / redundant columns
         data.drop(columns=['timestamp', 'attributes'], inplace=True)
 
+        # Remove duplicates (if any)
+        # data.drop_duplicates(subset=['name'], keep='first', inplace=True)
+
         # reset index
-        data = data.reset_index(inplace=True, drop=True)
+        data.reset_index(inplace=True, drop=True)
 
         # return full data
         return data, image_base_path
