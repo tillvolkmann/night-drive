@@ -94,5 +94,6 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show=T
         fig.show()
 
     # save figure to disk
-    print("Saving figure file {}".format(save_name))
-    plt.savefig(save_name+".png", format='png', dpi=90, bbox_inches='tight')
+    if save_name is not None:
+        print("Saving figure file {}".format(save_name))
+        plt.savefig(save_name+".png", format='png', dpi=90, bbox_inches='tight')
