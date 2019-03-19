@@ -4,7 +4,7 @@ import matplotlib.image as mpimg
 import math
 from random import shuffle
 import pandas as pd
-
+import numpy as np
 
 def load_bdd_json(json_path, data_root):
     """
@@ -46,7 +46,6 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show=T
     Displays images in a grid-like arrangement.
 
 
-
     """
 
     n_img = len(names)
@@ -56,7 +55,8 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show=T
     if do_shuffle:
         shuffle(names)
 
-    ncol = int(n_img ** (0.5))
+    # ncol = int(n_img ** (0.5))
+    ncol = int(np.round(n_img ** (0.5)))
     if ncol < max_ncol:
         nrow = int(math.ceil(n_img ** (0.5)))
     else:
@@ -78,8 +78,13 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show=T
         # plot
         imgplot = ax[row, col].imshow(img, interpolation="none")
         #
-        if print_name:
-            pass
+        xytext_base = (2,3)
+        if print_name is True:
+            name = os.path.basename(names[c])
+            ax[row, col].annotate(name, (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+            xytext_base = (2,17)
+        if labels is not None:
+            ax[row, col].annotate(str(labels[c]), (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
 
         # style
         ax[row, col].set_xticks([])
