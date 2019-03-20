@@ -213,10 +213,10 @@ def pandas_to_bddjson(df, dest_path):
     df["attributes"] = df.apply(lambda row: {'weather':row['weather'], 'scene':row['scene'], 'timeofday':row['timeofday']}, axis=1)  # This gives warning: another try: cur_file["attributes"] = [{'weather': we, 'scene': sc, 'timeofday': tod} for we, sc, tod in zip(cur_file.weather, cur_file.scene, cur_file.timeofday)]
     df = df[["attributes", "labels", "name", "timestamp"]]
     # write json file to hdd
-    if cfg.version == 0:
-        df.to_json(path_or_buf=dest_path)
-    elif cfg.version == 1:  # new version, avoids writing pandas index to json; should only make a difference downstream when json.load is used, not when pd.read_json is used
-        df.to_json(path_or_buf=dest_path, orient="records")
+    #if cfg.version == 0:
+    #    df.to_json(path_or_buf=dest_path)
+    #elif cfg.version == 1:  # new version, avoids writing pandas index to json; should only make a difference downstream when json.load is used, not when pd.read_json is used
+    df.to_json(path_or_buf=dest_path, orient="records")
 
 
 if __name__ == "__main__":
@@ -384,13 +384,18 @@ if __name__ == "__main__":
             cur_file = data.query("{}==@cur_split".format(info_dict[split]['set'])).reset_index(drop=True)
 
         # create folder structure
-        if not os.path.exists(info_dict[split]["destination_path"]):
-            os.makedirs(info_dict[split]["destination_path"])
+        if cfg.do_make_dirs:
+            if not os.path.exists(info_dict[split]["destination_path"]):
+                os.makedirs(info_dict[split]["destination_path"])
+            else:
+                raise Exception("Destination folder(s) already exist.")
         else:
-            raise Exception("Destination folder(s) already exist.")
+            if not os.path.exists(info_dict[split]["destination_path"]):
+                os.makedirs(info_dict[split]["destination_path"])
 
         # save a json in bdd format containing only the original images
-        pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_filepath"])
+        if cfg.do_make_jsons:
+            pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_filepath"])
 
         # copy original images associated with current split into new folder
         if cfg.do_copy_images:
@@ -421,7 +426,8 @@ if __name__ == "__main__":
                         print("Physical over-sampling done for {} of {} entries.".format(i, cf_shape_before))
 
         # save a json in bdd format containing also the over-samples
-        pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_over_filepath"])
+        if cfg.do_make_jsons:
+            pandas_to_bddjson(cur_file.copy(), info_dict[split]["destination_json_over_filepath"])
 
     # copy images not used to folder "rest"
     if cfg.do_copy_images:
@@ -432,6 +438,16 @@ if __name__ == "__main__":
         for img_path in data_notused["name"]:
             copyfile(img_path, os.path.join(path_rest, os.path.basename(img_path)))
 
+
+    # ==================================================================================================================
+    # GET GAN-AUGMENTED DATA SETS
+    # ==================================================================================================================
+    
+
+
+    # ==================================================================================================================
+    # WRITE MAIN JSON
+    # ==================================================================================================================
     # write a main json containing the combined information for all splits, including additional info columns
     # first get relative path for images
     data.name = data.name.map(os.path.basename)

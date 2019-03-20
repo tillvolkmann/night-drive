@@ -1,5 +1,6 @@
 {
     "root_dir": "/home/till/SharedFolder/CurrentDatasets/bdd100k",
+    "root_dir_gan": "/home/till/SharedFolder/CurrentDatasets/bdd100k",
     "database": "bdd_all",
     "dropclass_dict": {"weather": ["undefined", "foggy"], "timeofday": ["undefined", "dawn/dusk"]},
     "mergeclass_dict": {"weather": {"cloudy": ["overcast", "partly cloudy"]}},
@@ -11,10 +12,21 @@
         "test":      {"n": 2000,    "class_dist": {"daytime": 0.5, "dawn/dusk": 0.0, "night": 0.5},   "balancing": "none",  "over": "none", "class_min": 50}
     },
     "train_dev_n": 2000,
-    "destination_path": "/home/till/SharedFolder/CurrentDatasets/bdd100k_sorted",
+    "destination_path": "/home/till/SharedFolder/CurrentDatasets/bdd100k_sorted_test",
     "destination_filename_stem": "bdd100k_sorted_",
     "do_oversample_physically": "False",
     "do_make_dirs": "False",
+    "do_make_jsons": "True",
     "do_copy_images": "False",
-    "do_balance_timeofday_after_oversampling": "True"
+    "do_balance_timeofday_after_oversampling": "True",
+    "gan_augment_dict": {
+	"train_A_ganaug_025": {"base_split": "train_A", "augment_fraction": {"night": 0, "daytime": 0.25}, "augment_mode": "before_over"},
+	"train_A_ganaug_050": {"base_split": "train_A", "augment_fraction": {"night": 0, "daytime": 0.50}, "augment_mode": "before_over"},
+	"train_B_ganaug_025": {"base_split": "train_B", "augment_fraction": {"night": 0, "daytime": 0.25}, "augment_mode": "before_over"}
+    },
+    "gan_transform_suffix": {"daytime": "_transfer_BtoA", "night": "_transfer_AtoB"},
+    "do_make_dirs_gan": "False",
+    "do_make_jsons_gan": "True",
+    "do_copy_images_gan": "False",
+    "version": 1
 }
