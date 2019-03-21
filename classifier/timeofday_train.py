@@ -1,33 +1,17 @@
 import time
 import torch
-import neptune
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 import torchvision.transforms as transforms
 import datasets.bdd.BDDTimeOfDayDataset as bdd
-import sklearn.metrics as metrics
-from tensorboardX import SummaryWriter
+from classification_eval import evaluate_timeofday
 
-def evaluate_f1_score(net, data_loader, num_batches = None):
-    # f1 score: https://scikit-learn.org/stable/modules/model_evaluation.html#from-binary-to-multiclass-and-multilabel
-    net.eval() # disables dropout, etc.
-    with torch.no_grad(): # temporarily disables gradient computation for speed-up
-        accumulated_targets = []
-        accumulated_outputs = []
-        for i, data in enumerate(data_loader, 0):
-            inputs, targets = data
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            accumulated_targets.extend(targets.detach().cpu().numpy().tolist())
-            #accumulated_outputs.extend(np.argmax(outputs.detach().cpu().numpy().tolist(), axis=1))
-            accumulated_outputs.extend((outputs.detach().cpu().numpy() > 0.5).tolist()) # for binary classfication
-            if num_batches is not None and (i >= (num_batches - 1)):
-                break
-        f1_score = metrics.f1_score(accumulated_targets, accumulated_outputs, average="weighted")
-    net.train()
-    return f1_score
+# Logging
+#import neptune
+#from tensorboardX import SummaryWriter
+
 
 if __name__ == '__main__':
 
@@ -36,10 +20,10 @@ if __name__ == '__main__':
     np.random.seed(123)
 
     # setup job monitoring on Neptune
-    ctx = neptune.Context()
+    #ctx = neptune.Context()
 
     # setup job monitoring on TensorBoardX
-    writer = SummaryWriter()
+    #writer = SummaryWriter()
 
     # setting device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -72,14 +56,12 @@ if __name__ == '__main__':
 
     # create model
     net = models.resnet18(pretrained = True)
-    #net.fc = nn.Linear(net.fc.in_features, ds_train._get_num_classes())
     net.fc = nn.Linear(net.fc.in_features, 1) # for binary classfication
 
     # send model to device
     net.to(device)
 
     # loss function
-    #criterion = nn.CrossEntropyLoss()
     criterion = nn.BCEWithLogitsLoss()
 
     # optimizer
@@ -157,15 +139,15 @@ if __name__ == '__main__':
                 running_loss_valid = 0.0
 
             # send to Neptune and TensorBoardX
-            ctx.channel_send('train_loss', i, loss.data.cpu().numpy())
-            writer.add_scalar('train/loss', loss.data.cpu().numpy(), i)
-            if calc_valid_loss:
-                ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
-                writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
+            #ctx.channel_send('train_loss', i, loss.data.cpu().numpy())
+            #writer.add_scalar('train/loss', loss.data.cpu().numpy(), i)
+            #if calc_valid_loss:
+            #    ctx.channel_send('valid_loss', i, loss_valid.data.cpu().numpy())
+            #    writer.add_scalar('valid/loss', loss_valid.data.cpu().numpy(), i)
 
         # f1-score on training set, validation set
-        f1_train = evaluate_f1_score(net, dl_train)
-        f1_valid = evaluate_f1_score(net, dl_valid)
+        f1_train = evaluate_timeofday(net, dl_train)
+        f1_valid = evaluate_timeofday(net, dl_valid)
         print(f"F1-Score after {epoch + 1} epochs: Training = {f1_train:.2f} Validation = {f1_valid:.2f}")
         # save model if best so far
         if f1_valid > best_f1_valid:
@@ -191,4 +173,4 @@ if __name__ == '__main__':
     }, './models/resnet18_timeofday_daynight_classifier_final.pth')
 
     # close TensorBoardX
-    writer.close()
+    #writer.close()
