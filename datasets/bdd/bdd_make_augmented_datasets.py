@@ -8,32 +8,31 @@ from bdd_make_datasets import pandas_to_bddjson
 import re
 
 
-def get_filepath(root, fname_search):
-    for dir, _, fnames in os.walk(root):
-        for fname in fnames:
-            if fname in fname_search:
-                return os.path.join(dir, fname)
-    raise Exception("Couldn't load image {} from root {}".format(fname_search, root))
-
-
 if __name__ == "__main__":
 
     # ==================================================================================================================
     # SETTINGS
     # ==================================================================================================================
-    data_root = "/home/SharedFolder/CurrentDatasets"  # "/home/till/SharedFolder/CurrentDatasets/"
-    project_root = "/home/night-drive/Docker/SharedFolder/git/tillvolkmann/night-drive"  # "/home/till/projects/night-drive/"
+    # root_dir_gan (set in config):
+    #    DSR:             "/home/SharedFolder/CurrentDatasets"
+    #    Till home:       "/home/till/SharedFolder/CurrentDatasets"
+    # project_root (set in config):
+    #    DSR: "/home/night-drive/Docker/SharedFolder/git/tillvolkmann/night-drive"
+    #    Till home:       "/home/till/projects/night-drive"
+    project_root = "/home/night-drive/Docker/SharedFolder/git/tillvolkmann/night-drive"
 
-    # ==================================================================================================================
     # load config
-    # ==================================================================================================================
     cfg_name = os.path.join(project_root, 'config/config_bdd_make_datasets.json')
     cfg = bdd.GetConfig(cfg_name)
+
+    # auto paths, usually not necessary to change
+    path_orig_images = os.path.join(cfg.root_dir_gan, "bdd100k/images/100k")
+    path_main_json = os.path.join(cfg.root_dir_gan, "bdd100k_sorted/annotations/bdd100k_sorted_main.json")
 
     # ==================================================================================================================
     # load main json
     # ==================================================================================================================
-    data = pd.read_json(os.path.join(data_root, "bdd100k_sorted/annotations/bdd100k_sorted_main.json"))
+    data = pd.read_json(path_main_json)
     data.reset_index(drop=True, inplace=True)
 
     # ==================================================================================================================
@@ -180,14 +179,26 @@ if __name__ == "__main__":
     # ==================================================================================================================
     # get paths
     # ==================================================================================================================
-    data["path"] = data["name"].apply(lambda x: get_filepath(cfg.root_dir, x))
-    data["path_aug"] = data["name_aug"].apply(lambda x: get_filepath(cfg.root_dir_gan, x))
+    data = data.reset_index(drop=True)
+    # get paths to original BDD images and get paths to gan-augmented versions of the BDD images
+    data["path"] = data["name"].apply(lambda x: os.path.join(path_orig_images, "train", x))
+    data["path_aug"] = data["name_aug"].apply(
+        lambda x: os.path.join(path_orig_images, "train" + cfg.gan_folder_suffix, x))
+    for i in range(data.shape[0]):
+        if not os.path.exists(data.loc[i, "path"]):
+            data.loc[i, "path"] = os.path.join(path_orig_images, "val", data.loc[i, "name"])
+            data.loc[i, "path_aug"] = os.path.join(path_orig_images, "val" + cfg.gan_folder_suffix,
+                                                   data.loc[i, "name_aug"])
+        if not i % 5000:
+            print("Found path for {}-th image...".format(i))
 
     # ==================================================================================================================
     # now separate data, copy images, and create the different jsons
     # ==================================================================================================================
     _, ext = os.path.splitext(data.loc[0, "name"])
     for split in gan_info_dict["splits"]:  # for each split
+        # Print message
+        print("=== Processing data for split: {} ==================".format(split))
         # unpack some helpers
         aug_set = gan_info_dict[split]["set"]
         aug_set_base = gan_info_dict[split]["aug_set_base"]
@@ -240,24 +251,30 @@ if __name__ == "__main__":
 
             # append oversamples to cur_file (file names = original file name + copy1, copy2, etc.
             col_name = aug_set_n_over_base
-            cf_shape_before = cur_file.shape[0]
-            for i in range(cf_shape_before):
-                n_over = int(cur_file.loc[i, col_name])
-                for j in range(n_over):
-                    cur_file.loc[cur_file.shape[0], :] = cur_file.loc[i, :]
-                    cur_file = cur_file.reset_index(drop=True)
-                    # pd.concat([cur_file,cur_file.iloc[i,:]], ignore_index=True)
-                    # make physical copies of the oversamples, if requested
-                    if cfg.do_oversample_physically == True:
-                        name_original = cur_file.loc[i, "name"]
-                        name_copy = os.path.join(gan_info_dict[split]["destination_path"], os.path.basename(
-                            name_original.split(".")[0] + "_copy" + str(j + 1) + "." + name_original.split(".")[
-                                1]))  # rename file by appending _copy1, _copy2, etc
-                        print(name_original, '>>>\n', name_copy)
-                        copyfile(name_original, name_copy)
-                        cur_file.loc[cur_file.shape[0] - 1, "name"] = name_copy  # store the new name
-                if i % 1000 == 0:
-                    print("Over-sampling done for {} of {} entries.".format(i, cf_shape_before))
+            if cfg.do_oversample_physically:
+                cf_shape_before = cur_file.shape[0]
+                for i in range(cf_shape_before):
+                    n_over = int(cur_file.loc[i, col_name])
+                    for j in range(n_over):
+                        cur_file.loc[cur_file.shape[0], :] = cur_file.loc[i, :]
+                        cur_file = cur_file.reset_index(drop=True)
+                        # pd.concat([cur_file,cur_file.iloc[i,:]], ignore_index=True)
+                        # make physical copies of the oversamples, if requested
+                        if cfg.do_oversample_physically == True:
+                            name_original = cur_file.loc[i, "name"]
+                            name_copy = os.path.join(gan_info_dict[split]["destination_path"], os.path.basename(
+                                name_original.split(".")[0] + "_copy" + str(j + 1) + "." + name_original.split(".")[
+                                    1]))  # rename file by appending _copy1, _copy2, etc
+                            print(name_original, '>>>\n', name_copy)
+                            copyfile(name_original, name_copy)
+                            cur_file.loc[cur_file.shape[0] - 1, "name"] = name_copy  # store the new name
+                    if i % 1000 == 0:
+                        print("Over-sampling done for {} of {} entries.".format(i, cf_shape_before))
+            else:  # this is much faster
+                cur_file.reset_index(drop=True, inplace=True)
+                cur_file = pd.concat([cur_file,
+                                      cur_file.loc[np.repeat(cur_file.index.values, cur_file[col_name])]],
+                                     axis=0).reset_index(drop=True)
 
             # shuffle
             # cur_file.sample(frac=1.0, random_state=123).reset_index(drop=True)
