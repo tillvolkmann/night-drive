@@ -13,13 +13,16 @@ if __name__ == "__main__":
     # ==================================================================================================================
     # SETTINGS
     # ==================================================================================================================
+    #
+    # Example call: python3 ./datasets/bdd/bdd_make_augmented_datasets.py
+    #
     # root_dir_gan (set in config):
-    #    DSR:             "/home/SharedFolder/CurrentDatasets"
+    #    DSR docker:             "/home/SharedFolder/CurrentDatasets"
     #    Till home:       "/home/till/SharedFolder/CurrentDatasets"
     # project_root (set in config):
-    #    DSR: "/home/night-drive/Docker/SharedFolder/git/tillvolkmann/night-drive"
+    #    DSR docker: "/home/SharedFolder/git/tillvolkmann/night-drive"
     #    Till home:       "/home/till/projects/night-drive"
-    project_root = "/home/night-drive/Docker/SharedFolder/git/tillvolkmann/night-drive"
+    project_root = "/home/SharedFolder/git/tillvolkmann/night-drive"
 
     # load config
     cfg_name = os.path.join(project_root, 'config/config_bdd_make_datasets.json')
