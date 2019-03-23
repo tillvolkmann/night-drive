@@ -16,8 +16,7 @@ def weather_classifier(path_train_json = None, path_train_images = None, path_va
     np.random.seed(123)
 
     # data loader
-    #dl_batch_size = 128 #train
-    dl_batch_size = 32 #valid
+    dl_batch_size = 128
     dl_num_workers_train = 10
     dl_num_workers_valid = 6
     dl_shuffle = True
