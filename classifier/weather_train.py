@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+from argparse import ArgumentParser
 from weather_classifier import weather_classifier
 
 # Logging
@@ -15,12 +16,18 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--path_train_json", dest = "path_train_json", help = "path to json file of dataset to be used for training")
+    parser.add_argument("--path_train_images", dest = "path_train_images", help = "path to images of dataset to be used for training")
+    parser.add_argument("--path_valid_json", dest = "path_valid_json", help = "path to json file of dataset to be used for evaluation")
+    parser.add_argument("--path_valid_images", dest = "path_valid_images", help = "path to images of dataset to be used for evaluation")
+    args = parser.parse_args()
 
     # set data paths
-    path_train_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_A"
-    path_train_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_A_over.json"
-    path_valid_images = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_dev_A"
-    path_valid_json = "/home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_dev_A_over.json"
+    path_train_images = args.path_train_images
+    path_train_json = args.path_train_json
+    path_valid_images = args.path_valid_images
+    path_valid_json = args.path_valid_json
 
     # seeds
     torch.manual_seed(123)

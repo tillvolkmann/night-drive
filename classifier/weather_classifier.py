@@ -47,11 +47,13 @@ def weather_classifier(path_train_json = None, path_train_images = None, path_va
     num_classes = None
     if path_train_json is not None and path_train_images is not None:
         ds_train = BDDWeatherDataset(path_train_json, path_train_images, transform = transform["train"], drop_cls = ["cloudy"])
+        #ds_train = BDDWeatherDataset(path_train_json, path_train_images, transform = transform["train"])
         dl_train = torch.utils.data.DataLoader(ds_train, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers_train)
         class_dict = ds_train._get_class_dict()
         num_classes = ds_train._get_num_classes()
     if path_valid_json is not None and path_valid_images is not None:
         ds_valid = BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"], drop_cls = ["cloudy"])
+        #ds_valid = BDDWeatherDataset(path_valid_json, path_valid_images, transform = transform["valid"])
         dl_valid = torch.utils.data.DataLoader(ds_valid, batch_size = dl_batch_size, shuffle = dl_shuffle, num_workers = dl_num_workers_valid)
         if class_dict is not None and num_classes is not None:
             assert class_dict == ds_valid._get_class_dict()

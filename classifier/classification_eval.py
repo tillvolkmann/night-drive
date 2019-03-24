@@ -9,6 +9,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_curve, auc
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import average_precision_score
+from sklearn.metrics import matthews_corrcoef
 from sklearn.preprocessing import label_binarize
 
 # setting device
@@ -75,6 +76,8 @@ def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_
         if "pr_macro" in score_types and class_dict is not None:
             _, _, average_precision, _ = calculate_precision_recall(accumulated_targets, accumulated_prediction_scores, class_dict)
             scores["pr_macro"] = average_precision["macro"]
+        if "mcc" in score_types and class_dict is not None:
+            scores["mcc"] = matthews_corrcoef(accumulated_targets, accumulated_predictions)
     net.train()
     return scores, {"targets": accumulated_targets, "predictions": accumulated_predictions, "prediction_scores": accumulated_prediction_scores, "paths": accumulated_paths}
 
