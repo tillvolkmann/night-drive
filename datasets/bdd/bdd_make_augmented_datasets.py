@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # project_root (set in config):
     #    DSR docker: "/home/SharedFolder/git/tillvolkmann/night-drive"
     #    Till home:       "/home/till/projects/night-drive"
-    project_root = "/home/SharedFolder/git/tillvolkmann/night-drive"
+    project_root = "/home/till/projects/night-drive" # "/home/SharedFolder/git/tillvolkmann/night-drive"
 
     # load config
     cfg_name = os.path.join(project_root, 'config/config_bdd_make_datasets.json')
@@ -68,6 +68,7 @@ if __name__ == "__main__":
             gan_info_dict[split]["destination_path_traindev"] = os.path.join(cfg.destination_path, gan_info_dict[split]["split_traindev"])
         else:  # create all files in the same dir
             gan_info_dict[split]["destination_path"] = cfg.destination_path
+            gan_info_dict[split]["destination_path_traindev"] = cfg.destination_path
         # destination file names
         gan_info_dict[split]["destination_json_filename"] = cfg.destination_filename_stem + split + ".json"
         gan_info_dict[split]["destination_json_over_filename"] = cfg.destination_filename_stem + split + "_over" + ".json"
@@ -78,11 +79,9 @@ if __name__ == "__main__":
         gan_info_dict[split]["destination_json_filepath"] = os.path.join(gan_info_dict[split]["destination_path"], gan_info_dict[split]["destination_json_filename"])
         gan_info_dict[split]["destination_json_over_filepath"] = os.path.join(gan_info_dict[split]["destination_path"], gan_info_dict[split]["destination_json_over_filename"])
         # for train_dev
-        gan_info_dict[split]["destination_json_filepath_traindev"] = os.path.join(gan_info_dict[split]["destination_path"], gan_info_dict[split]["destination_json_filename_traindev"])
-        gan_info_dict[split]["destination_json_over_filepath_traindev"] = os.path.join(gan_info_dict[split]["destination_path"], gan_info_dict[split]["destination_json_over_filename_traindev"])
-
+        gan_info_dict[split]["destination_json_filepath_traindev"] = os.path.join(gan_info_dict[split]["destination_path_traindev"], gan_info_dict[split]["destination_json_filename_traindev"])
+        gan_info_dict[split]["destination_json_over_filepath_traindev"] = os.path.join(gan_info_dict[split]["destination_path_traindev"], gan_info_dict[split]["destination_json_over_filename_traindev"])
         c += 1
-
 
     # ==================================================================================================================
     # Sample the data sets
@@ -212,32 +211,55 @@ if __name__ == "__main__":
         base_set_n_over = gan_info_dict[split]["base_set_n_over"]
         # for each sub-split
         for sub in ["train", "train_dev"]:
+            # Print message
+            print("--- Processing data for sub-split: {} ---".format(sub))
             if sub == "train_dev":
                 destination_json_over_filepath = gan_info_dict[split]["destination_json_over_filepath_traindev"]
                 destination_json_filepath = gan_info_dict[split]["destination_json_filepath_traindev"]
+                destination_path = gan_info_dict[split]["destination_path_traindev"]
             else:
                 destination_json_over_filepath = gan_info_dict[split]["destination_json_over_filepath"]
                 destination_json_filepath = gan_info_dict[split]["destination_json_filepath"]
+                destination_path = gan_info_dict[split]["destination_path"]
 
-            ### get all elements associated with the current split into a separate data frame
+
+            # create folder structure
+            if not os.path.exists(destination_path):
+                os.makedirs(destination_path)
+            elif cfg.do_make_dirs_gan:
+                raise Exception(
+                    "Destination folder ({}) already exist.".format(destination_path))
+
+            # get all elements associated with the current split into a separate data frame
             # first query all entries not to be augmented
-            cur_file = data.query("({0}==@sub) & (({1}==0) | ({1}==2))".format(aug_set_base, aug_set)).reset_index(
+            cur_base = data.query("({0}==@sub) & (({1}==0) | ({1}==2))".format(aug_set_base, aug_set)).reset_index(
                 drop=True)
+
             # next, query the data to be augmented
             cur_aug = data.query("({0}==@sub) & (({1}==1) | ({1}==2))".format(aug_set_base, aug_set)).reset_index(
                 drop=True)
+
+            # save another json containing only the non-augmented data, and one containing the base data of the
+            # augmented data; these are only needed for some sub-sampling tests
+            if cfg.do_make_jsons_gan:
+                cur_part = cur_base.copy()
+                cur_path_part, ext = os.path.splitext(destination_json_filepath)
+                cur_path_part = cur_path_part+"_baseonly"+ext
+                print("Writing json to {}".format(cur_path_part))
+                pandas_to_bddjson(cur_part.copy(), cur_path_part)
+                cur_part = cur_aug.copy()
+                cur_path_part, ext = os.path.splitext(destination_json_filepath)
+                cur_path_part = cur_path_part+"_augonlyasbase"+ext
+                print("Writing json to {}".format(cur_path_part))
+                pandas_to_bddjson(cur_part.copy(), cur_path_part)
+
             # rename augmented data
             cur_aug["name"] = cur_aug["name_aug"]
             cur_aug["path"] = cur_aug["path_aug"]
             cur_aug[aug_set_n_over_base] = cur_aug[aug_set_n_over_aug]
-            # now combine
-            cur_file = pd.concat([cur_file, cur_aug], axis=0).reset_index(drop=True)
 
-            # create folder structure
-            if not os.path.exists(gan_info_dict[split]["destination_path"]):
-                os.makedirs(gan_info_dict[split]["destination_path"])
-            elif cfg.do_make_dirs_gan:
-                raise Exception("Destination folder(s) already exist.")
+            # now combine
+            cur_file = pd.concat([cur_base, cur_aug], axis=0).reset_index(drop=True)
 
             # save a json in bdd format containing only the unique original and augmented images
             if cfg.do_make_jsons_gan:
@@ -245,12 +267,12 @@ if __name__ == "__main__":
                 pandas_to_bddjson(cur_file.copy(), destination_json_filepath)
 
             # copy original images associated with current split into new folder
-            if cfg.do_copy_images_gan == True:
-                print("Copying {} images to {}".format(cur_file.shape[0], gan_info_dict[split]["destination_path"]))
+            if cfg.do_copy_images_gan:
+                print("Copying {} images to {}".format(cur_file.shape[0], destination_path))
                 for img in cur_file["path"]:
                     img_path = os.path.join(img)
                     copyfile(img_path,
-                             os.path.join(gan_info_dict[split]["destination_path"], os.path.basename(img_path)))
+                             os.path.join(destination_path, os.path.basename(img_path)))
 
             # append oversamples to cur_file (file names = original file name + copy1, copy2, etc.
             col_name = aug_set_n_over_base
@@ -265,7 +287,7 @@ if __name__ == "__main__":
                         # make physical copies of the oversamples, if requested
                         if cfg.do_oversample_physically == True:
                             name_original = cur_file.loc[i, "name"]
-                            name_copy = os.path.join(gan_info_dict[split]["destination_path"], os.path.basename(
+                            name_copy = os.path.join(destination_path, os.path.basename(
                                 name_original.split(".")[0] + "_copy" + str(j + 1) + "." + name_original.split(".")[
                                     1]))  # rename file by appending _copy1, _copy2, etc
                             print(name_original, '>>>\n', name_copy)
@@ -286,6 +308,33 @@ if __name__ == "__main__":
             if cfg.do_make_jsons_gan:
                 pandas_to_bddjson(cur_file.copy(), destination_json_over_filepath)
 
+
+            # split the current file
+
+
+            # save another json containing only the non-augmented data, and one containing the base data of the
+            # augmented data; these are only needed for some sub-sampling tests
+            if cfg.do_make_jsons_gan:
+                cur_part = cur_file.query(
+                    "({0}==@sub) & (({1}==0) | ({1}==2))".format(aug_set_base, aug_set)).reset_index(
+                    drop=True)
+                cur_path_part, ext = os.path.splitext(destination_json_over_filepath)
+                cur_path_part = cur_path_part + "_baseonly" + ext
+                print("Writing json to {}".format(cur_path_part))
+                pandas_to_bddjson(cur_part.copy(), cur_path_part)
+                cur_part = cur_file.query(
+                    "({0}==@sub) & (({1}==1) | ({1}==2))".format(aug_set_base, aug_set)).reset_index(
+                    drop=True)
+                # remove suffix
+                mask = cur_part["timeofday"] == "night"
+                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(lambda x: re.sub(cfg.gan_transform_suffix["daytime"], '', x))
+                mask = cur_part["timeofday"] == "daytime"
+                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(lambda x: re.sub(cfg.gan_transform_suffix["night"], '', x))
+                cur_path_part, ext = os.path.splitext(destination_json_over_filepath)
+                cur_path_part = cur_path_part + "_augonlyasbase" + ext
+                print("Writing json to {}".format(cur_path_part))
+                pandas_to_bddjson(cur_part.copy(), cur_path_part)
+
     # ==================================================================================================================
     # WRITE MAIN JSON
     # ==================================================================================================================
@@ -293,8 +342,5 @@ if __name__ == "__main__":
     # first get relative path for images
     # data.name = data.name.map(os.path.basename)
     # now write
-    if cfg.version == 0:
-        data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main" + ".json"))
-    elif cfg.version == 1:
-        data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main" + ".json"),
-                     orient="records")
+    data.drop(columns=['labels'], inplace=True)  # need to drop some data to avoid memory error
+    data.to_json(os.path.join(cfg.destination_path, cfg.destination_filename_stem + "main_augmented" + ".json"), orient="records")
