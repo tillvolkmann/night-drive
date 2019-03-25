@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # project_root (set in config):
     #    DSR docker: "/home/SharedFolder/git/tillvolkmann/night-drive"
     #    Till home:       "/home/till/projects/night-drive"
-    project_root = "/home/till/projects/night-drive" # "/home/SharedFolder/git/tillvolkmann/night-drive"
+    project_root = "/home/SharedFolder/git/tillvolkmann/night-drive"
 
     # load config
     cfg_name = os.path.join(project_root, 'config/config_bdd_make_datasets.json')
@@ -222,7 +222,6 @@ if __name__ == "__main__":
                 destination_json_filepath = gan_info_dict[split]["destination_json_filepath"]
                 destination_path = gan_info_dict[split]["destination_path"]
 
-
             # create folder structure
             if not os.path.exists(destination_path):
                 os.makedirs(destination_path)
@@ -244,12 +243,12 @@ if __name__ == "__main__":
             if cfg.do_make_jsons_gan:
                 cur_part = cur_base.copy()
                 cur_path_part, ext = os.path.splitext(destination_json_filepath)
-                cur_path_part = cur_path_part+"_baseonly"+ext
+                cur_path_part = cur_path_part + "_baseonly" + ext
                 print("Writing json to {}".format(cur_path_part))
                 pandas_to_bddjson(cur_part.copy(), cur_path_part)
                 cur_part = cur_aug.copy()
                 cur_path_part, ext = os.path.splitext(destination_json_filepath)
-                cur_path_part = cur_path_part+"_augonlyasbase"+ext
+                cur_path_part = cur_path_part + "_augonlyasbase" + ext
                 print("Writing json to {}".format(cur_path_part))
                 pandas_to_bddjson(cur_part.copy(), cur_path_part)
 
@@ -267,7 +266,7 @@ if __name__ == "__main__":
                 pandas_to_bddjson(cur_file.copy(), destination_json_filepath)
 
             # copy original images associated with current split into new folder
-            if cfg.do_copy_images_gan:
+            if cfg.do_copy_images_gan == True:
                 print("Copying {} images to {}".format(cur_file.shape[0], destination_path))
                 for img in cur_file["path"]:
                     img_path = os.path.join(img)
@@ -308,10 +307,6 @@ if __name__ == "__main__":
             if cfg.do_make_jsons_gan:
                 pandas_to_bddjson(cur_file.copy(), destination_json_over_filepath)
 
-
-            # split the current file
-
-
             # save another json containing only the non-augmented data, and one containing the base data of the
             # augmented data; these are only needed for some sub-sampling tests
             if cfg.do_make_jsons_gan:
@@ -327,9 +322,11 @@ if __name__ == "__main__":
                     drop=True)
                 # remove suffix
                 mask = cur_part["timeofday"] == "night"
-                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(lambda x: re.sub(cfg.gan_transform_suffix["daytime"], '', x))
+                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(
+                    lambda x: re.sub(cfg.gan_transform_suffix["daytime"], '', x))
                 mask = cur_part["timeofday"] == "daytime"
-                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(lambda x: re.sub(cfg.gan_transform_suffix["night"], '', x))
+                cur_part.loc[mask, "name"] = cur_part.loc[mask, "name_aug"].apply(
+                    lambda x: re.sub(cfg.gan_transform_suffix["night"], '', x))
                 cur_path_part, ext = os.path.splitext(destination_json_over_filepath)
                 cur_path_part = cur_path_part + "_augonlyasbase" + ext
                 print("Writing json to {}".format(cur_path_part))
