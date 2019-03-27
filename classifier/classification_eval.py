@@ -10,6 +10,7 @@ from sklearn.metrics import roc_curve, auc
 from sklearn.metrics import precision_recall_curve
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import balanced_accuracy_score
 from sklearn.preprocessing import label_binarize
 
 # setting device
@@ -64,6 +65,8 @@ def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_
             scores["f1_score_macro"] = metrics.f1_score(accumulated_targets, accumulated_predictions, average = "macro")
         if "accuracy" in score_types:
             scores["accuracy"] = metrics.accuracy_score(accumulated_targets, accumulated_predictions)
+        if "accuracy_balanced" in score_types:
+            scores["accuracy_balanced"] = metrics.balanced_accuracy_score(accumulated_targets, accumulated_predictions)
         if "roc_auc_micro" in score_types and class_dict is not None:
             roc_auc, _, _, _ = calculate_roc_auc(accumulated_targets, accumulated_prediction_scores, class_dict)
             scores["roc_auc_micro"] = roc_auc["micro"]
