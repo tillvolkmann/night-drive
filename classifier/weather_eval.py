@@ -49,7 +49,7 @@ if __name__ == "__main__":
         # scores
         scores, values = evaluate_weather(net, dl_valid,
                                           score_types=["f1_score_micro", "f1_score_macro", "f1_score_weighted",
-                                                       "accuracy", "roc_auc_micro", "roc_auc_macro", "pr_micro",
+                                                       "accuracy", "accuracy_balanced", "roc_auc_micro", "roc_auc_macro", "pr_micro",
                                                        "pr_macro", "mcc"], cut_off = None, class_dict = class_dict)
 
         # update

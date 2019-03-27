@@ -265,3 +265,47 @@ python weather_eval.py \
     --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_test_night.json \
     --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/test \
     --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+# train_A_over_ganaug_050_augonlyasbase
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_train_dev_A_ganaug_050_over_augonlyasbase.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/train_dev_A \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid_daytime.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_valid_night.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/valid \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_test.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/test \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_test_daytime.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/test \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
+
+python weather_eval.py \
+    --dir_weights /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy/train_A_over_ganaug_050_augonlyasbase \
+    --path_valid_json /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/annotations/bdd100k_sorted_test_night.json \
+    --path_valid_images /home/SharedFolder/CurrentDatasets/bdd100k_sorted_coco/test \
+    --out_folder /home/SharedFolder/trained_models/night-drive/weather_classifier/without_cloudy
