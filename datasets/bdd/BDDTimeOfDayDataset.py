@@ -135,7 +135,7 @@ class BDDTimeOfDayDataset(Dataset):
                         + glob.glob(self.root_dir + "/images/100k/test_converted_" + self.which_ganmodel + "/**/*.png", recursive=True)
                 data = pd.DataFrame(files, columns=["name"])
         elif split == "bddvalid_converted":
-            print(">> Using original BDD validation set")
+            print(">> Using GAN-transformed BDD validation set")
             if self.with_labels:
                 # validation set
                 data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val_converted.json"))
@@ -146,7 +146,7 @@ class BDDTimeOfDayDataset(Dataset):
                         + glob.glob(self.root_dir + "/images/100k/val_converted_" + self.which_ganmodel + "/**/*.png", recursive=True)
                 data = pd.DataFrame(files, columns=["name"])
         elif split == "bddtrain_converted":
-            print(">> Using original BDD validation set")
+            print(">> Using GAN-transformed BDD train set")
             if self.with_labels:
                 # training set
                 data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train_converted.json"))
