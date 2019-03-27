@@ -1,23 +1,32 @@
 """
 The script requires a json file in BDD format.
 
+Example call:
+python3 /home/SharedFolder/git/tillvolkmann/night-drive/classifier_timeofday/timeofday_predict.py
+cd /home/SharedFolder/git/tillvolkmann/night-drive/classifier_timeofday/
+python3 ./timeofday_predict.py
+
 """
+project_root = "/home/SharedFolder/CurrentDatasets/bdd100k/"
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as nnf
 import torchvision.models as models
 import torchvision.transforms as transforms
+import sys
+sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive")
+sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive/datasets")
 import datasets.bdd.BDDTimeOfDayDataset as bdd
+
 
 # setting device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"using {device}")
 
 # setting data set root dir
-root_dir = "/home/SharedFolder/CurrentDatasets/mapillary-vistas-as-bdd100k"
+root_dir = "/home/SharedFolder/CurrentDatasets/bdd100k/"
 which_split = "bddvalid_converted"
-
 results_json_file = which_split+"-timeofday-results.json"
 batch_size = 256
 
