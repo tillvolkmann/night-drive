@@ -1,3 +1,7 @@
+"""
+The script requires a json file in BDD format.
+
+"""
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -12,7 +16,9 @@ print(f"using {device}")
 
 # setting data set root dir
 root_dir = "/home/SharedFolder/CurrentDatasets/mapillary-vistas-as-bdd100k"
+which_split = "bddvalid_converted"
 
+results_json_file = which_split+"-timeofday-results.json"
 batch_size = 256
 
 # data transforms
@@ -24,7 +30,7 @@ transform = {
 }
 
 # create data sets
-dataset = bdd.BDDTimeOfDayDataset(root_dir, split = "bddtest", transform = transform["test"], with_labels = False)
+dataset = bdd.BDDTimeOfDayDataset(root_dir, split=which_split, transform=transform["test"], with_labels = False)
 
 # data loader
 dataloader = torch.utils.data.DataLoader(dataset, batch_size = batch_size, shuffle = True, num_workers = 16)
@@ -50,8 +56,9 @@ with torch.no_grad():
         inputs = inputs.to(device)
         outputs = net(inputs)
         outputs = nnf.sigmoid(outputs) # for probabilities (binary classification)
-        pd.DataFrame({"name": list(filenames), "predicted_timeofday": list(outputs.detach().cpu().numpy().squeeze())})
+        # pd.DataFrame({"name": list(filenames), "predicted_timeofday": list(outputs.detach().cpu().numpy().squeeze())})
         timeofday_predicted = pd.concat([timeofday_predicted, pd.DataFrame({"name": list(filenames),
-                                                "predicted_timeofday": list(outputs.detach().cpu().numpy().squeeze())})], ignore_index = True)
-    timeofday_predicted = timeofday_predicted.reset_index(drop = True)
-    timeofday_predicted.to_json("bdd-test-timeofday-results.json")
+                            "predicted_timeofday": list(outputs.detach().cpu().numpy().squeeze())})], ignore_index=True)
+    timeofday_predicted = timeofday_predicted.reset_index(drop=True)
+    timeofday_predicted.to_json(results_json_file)
+

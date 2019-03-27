@@ -5,16 +5,18 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 
+
 class BDDTimeOfDayDataset(Dataset):
 
     """ Constructor """
     def __init__(self, root_dir, transform = None, augment = None, split = "bddtrain", dropcls = [None],
-                 force_num = None, with_labels = True):
+                 force_num=None, with_labels=True, which_ganmodel="v032_e14"):
         self.root_dir = root_dir
         self.transform = transform
         self.augment = augment
         self.with_labels = with_labels
         self.data = self._load_data(split, dropcls, force_num)
+        self.which_ganmodel = which_ganmodel
         if with_labels:
             self.class_dict = dict(zip(list(np.sort(self.data.timeofday.unique())), list(range(self._get_num_classes()))))
         else:
@@ -63,8 +65,13 @@ class BDDTimeOfDayDataset(Dataset):
     def _get_class_dict(self):
         return self.class_dict
 
-    """ Read Berkeley Deep Drive label json. """
     def _load_data(self, split, dropcls, force_num):
+        """
+        Read Berkeley Deep Drive label json.
+
+        Requires original BDD folder structure as well as equally-named json files.
+
+        """
         if split == "bddtrain":
             print(">> Using original BDD training set")
             if self.with_labels:
@@ -98,7 +105,7 @@ class BDDTimeOfDayDataset(Dataset):
                 files = glob.glob(self.root_dir + "/images/100k/test/" + "/**/*.jpg", recursive = True) \
                         + glob.glob(self.root_dir + "/images/100k/test/" + "/**/*.png", recursive = True)
                 data = pd.DataFrame(files, columns=["name"])
-        else:
+        elif split == "bddtrainvalid":
             print(">> Mixing original BDD training and validation sets")
             if self.with_labels:
                 # training set
@@ -116,6 +123,42 @@ class BDDTimeOfDayDataset(Dataset):
                         + glob.glob(self.root_dir + "/images/100k/val/" + "/**/*.jpg", recursive = True) \
                         + glob.glob(self.root_dir + "/images/100k/val/" + "/**/*.png", recursive = True)
                 data = pd.DataFrame(files, columns=["name"])
+        elif split == "bddtest_converted":
+            print(">> Using GAN-transformed BDD test set")
+            if self.with_labels:
+                # test set
+                data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_test_converted.json"))
+                # concat path, since different for training and val set
+                data["name"] = self.root_dir + "/images/100k/test" + self.which_ganmodel + "/" + data["name"].astype(str)
+            else:
+                files = glob.glob(self.root_dir + "/images/100k/test_converted_" + self.which_ganmodel + "/**/*.jpg", recursive=True) \
+                        + glob.glob(self.root_dir + "/images/100k/test_converted_" + self.which_ganmodel + "/**/*.png", recursive=True)
+                data = pd.DataFrame(files, columns=["name"])
+        elif split == "bddvalid_converted":
+            print(">> Using original BDD validation set")
+            if self.with_labels:
+                # validation set
+                data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_val_converted.json"))
+                # concat path, since different for training and val set
+                data["name"] = self.root_dir + "/images/100k/val" + self.which_ganmodel + "/" + data["name"].astype(str)
+            else:
+                files = glob.glob(self.root_dir + "/images/100k/val_converted_" + self.which_ganmodel + "/**/*.jpg", recursive=True) \
+                        + glob.glob(self.root_dir + "/images/100k/val_converted_" + self.which_ganmodel + "/**/*.png", recursive=True)
+                data = pd.DataFrame(files, columns=["name"])
+        elif split == "bddtrain_converted":
+            print(">> Using original BDD validation set")
+            if self.with_labels:
+                # training set
+                data = pd.read_json(os.path.join(self.root_dir, "labels/bdd100k_labels_images_train_converted.json"))
+                # concat path, since different for training and val set
+                data["name"] = self.root_dir + "/images/100k/train" + self.which_ganmodel + "/" + data["name"].astype(str)
+            else:
+                files = glob.glob(self.root_dir + "/images/100k/val_converted_" + self.which_ganmodel + "/**/*.jpg", recursive=True) \
+                        + glob.glob(self.root_dir + "/images/100k/val_converted_" + self.which_ganmodel + "/**/*.png", recursive=True)
+                data = pd.DataFrame(files, columns=["name"])
+        else:
+            raise Exception(f"Split {split} is unknown.")
+
         if self.with_labels:
             # drop other attributes
             data["timeofday"] = data.attributes.apply(lambda x: x["timeofday"])
@@ -123,7 +166,7 @@ class BDDTimeOfDayDataset(Dataset):
             data = data.drop(columns = ["labels", "timestamp", "attributes"])
             # drop samples with unwanted classes
             data = data.loc[~data.timeofday.isin(dropcls)]
-            data = data.sample(frac = 1, random_state = 123).reset_index(drop = True)
+            data = data.sample(frac = 1, random_state=123).reset_index(drop = True)
             # balance classes to fixed number
             if force_num is not None:
                 data_balanced = pd.DataFrame()
