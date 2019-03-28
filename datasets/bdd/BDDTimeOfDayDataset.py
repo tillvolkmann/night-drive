@@ -9,14 +9,15 @@ from torch.utils.data import Dataset
 class BDDTimeOfDayDataset(Dataset):
 
     """ Constructor """
-    def __init__(self, root_dir, transform = None, augment = None, split = "bddtrain", dropcls = [None],
-                 force_num=None, with_labels=True, which_ganmodel="v032_e14"):
+    def __init__(self, root_dir, transform=None, augment=None, split="bddtrain", dropcls=[None],
+                 force_num=None, with_labels=True, output_filenames=False, which_ganmodel="v032_e14"):
         self.root_dir = root_dir
         self.transform = transform
         self.augment = augment
         self.with_labels = with_labels
-        self.data = self._load_data(split, dropcls, force_num)
+        self.output_filenames = output_filenames
         self.which_ganmodel = which_ganmodel
+        self.data = self._load_data(split, dropcls, force_num)
         if with_labels:
             self.class_dict = dict(zip(list(np.sort(self.data.timeofday.unique())), list(range(self._get_num_classes()))))
         else:
@@ -38,7 +39,10 @@ class BDDTimeOfDayDataset(Dataset):
             img = self.augment(img)
         if self.with_labels:
             target = self.class_dict[self._get_target(ix)]
-            return img, target
+            if self.output_filenames:
+                return img, target, self.data.name[ix]
+            else:
+                return img, target
         else:
             return img, self.data.name[ix]
 
