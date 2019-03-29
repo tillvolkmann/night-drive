@@ -254,7 +254,8 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
     probs, idx = h_x.sort(0, True)
     probs = probs.numpy()
     idx = idx.numpy()
-    if len(probs) == 1:  # otherwise is not array
+    print( probs, type(idx))
+    if len(idx) == 1:  # otherwise is not array
         idx = np.array([0])
 
     # generate class activation mapping for the top1 prediction
