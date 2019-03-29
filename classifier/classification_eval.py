@@ -36,7 +36,12 @@ def evaluate_timeofday(net, data_loader, num_batches = None):
     return f1_score
 
 
-def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_off = None, num_batches = None, class_dict = None):
+'''
+Note:
+if merge_cls is used, e. g. [[0, 1]], class 0 and 1 will be merged into class 0. if supplied a class_dict
+together with merge_cls, it must not contain the class "removed" during merge.
+'''
+def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_off = None, num_batches = None, class_dict = None, merge_cls = None):
     net.eval() # disables dropout, etc.
     with torch.no_grad(): # temporarily disables gradient computation for speed-up
         accumulated_targets = []
@@ -52,6 +57,29 @@ def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_
             accumulated_paths.extend(paths)
             if num_batches is not None and (i >= (num_batches - 1)):
                 break
+        if merge_cls is not None:
+            assert len(np.array(merge_cls).ravel()) == len(np.unique(np.array(merge_cls).ravel()))
+            class_dict_reverse = {class_id: class_name for class_name, class_id in class_dict.items()}
+            accumulated_prediction_scores = np.array(accumulated_prediction_scores)
+            merged_idx = []
+            for merge in merge_cls:
+                assert len(merge) > 1
+                accumulated_prediction_scores[:, merge[0]] = np.sum(accumulated_prediction_scores[:, merge], axis = 1)
+                accumulated_prediction_scores[:, merge[1:]] = 0
+                merged_idx.extend(merge[1:])
+                accumulated_targets = [merge[0] if target in merge else target for target in accumulated_targets]
+                for merged in merge[1:]:
+                    class_dict_reverse[merge[0]] += "/" + class_dict_reverse[merged]
+                    del class_dict_reverse[merged]
+            class_dict = {class_name: class_id for class_id, class_name in class_dict_reverse.items()}
+            # make contiguous
+            class_ids_old = sorted([class_id for class_name, class_id in class_dict.items()])
+            class_ids_new = sorted(list(range(len(class_ids_old))))
+            class_dict_reverse = {class_id: class_name for class_name, class_id in class_dict.items()}
+            for class_id_old, class_id_new in zip(class_ids_old, class_ids_new):
+                accumulated_targets = [class_id_new if class_id_old == class_id else class_id for class_id in accumulated_targets]
+                class_dict[class_dict_reverse[class_id_old]] = class_id_new
+            accumulated_prediction_scores = accumulated_prediction_scores[:, class_ids_old].tolist()
         if cut_off is not None:
             accumulated_predictions = [np.argmax(sample_scores) if max(sample_scores) >= cut_off else -1 for sample_scores in accumulated_prediction_scores]
         else:
@@ -82,7 +110,7 @@ def evaluate_weather(net, data_loader, score_types = ["f1_score_weighted"], cut_
         if "mcc" in score_types and class_dict is not None:
             scores["mcc"] = matthews_corrcoef(accumulated_targets, accumulated_predictions)
     net.train()
-    return scores, {"targets": accumulated_targets, "predictions": accumulated_predictions, "prediction_scores": accumulated_prediction_scores, "paths": accumulated_paths}
+    return scores, {"targets": accumulated_targets, "predictions": accumulated_predictions, "prediction_scores": accumulated_prediction_scores, "paths": accumulated_paths, "class_dict": class_dict}
 
 
 '''
