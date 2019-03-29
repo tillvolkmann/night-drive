@@ -43,7 +43,8 @@ def load_main_json(json_path, data_path):
     pass
 
 
-def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_fig=True, max_ncol=8, do_shuffle=True, labels=None, show_name=False, regex=None):
+def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_fig=True, max_ncol=8, do_shuffle=True,
+                   labels=None, show_name=False, regex=None):
     """
     Displays images in a grid-like arrangement.
 
@@ -112,20 +113,22 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
     c = 0
     for row in range(nrow):
         for col in range(ncol):
-            
+
             if c < n_img:
                 # load image
                 img = mpimg.imread(names[c])
                 # plot
                 imgplot = ax[row, col].imshow(img, interpolation="none")
                 #
-                xytext_base = (2,3)
+                xytext_base = (2, 3)
                 if show_name is True:
                     name = os.path.basename(names[c])
-                    ax[row, col].annotate(name, (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
-                    xytext_base = (2,17)
+                    ax[row, col].annotate(name, (0, 0), xytext=xytext_base, xycoords='axes points', fontsize=12,
+                                          color='white')
+                    xytext_base = (2, 17)
                 if labels is not None:
-                    ax[row, col].annotate(str(labels[c]), (0,0), xytext=xytext_base, xycoords='axes points', fontsize=12, color='white')
+                    ax[row, col].annotate(str(labels[c]), (0, 0), xytext=xytext_base, xycoords='axes points',
+                                          fontsize=12, color='white')
                 # style
                 ax[row, col].set_xticks([])
                 ax[row, col].set_yticks([])
@@ -153,7 +156,7 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
         if not os.path.exists(path):
             if __name__ == '__main__':
                 os.makedirs(path)
-        plt.savefig(save_name+".jpg", format='jpg', dpi=90, bbox_inches='tight')
+        plt.savefig(save_name + ".jpg", format='jpg', dpi=90, bbox_inches='tight')
 
     # return handles to figure and axes
     # return fig, ax
@@ -207,7 +210,7 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
     from torchvision import models, transforms
     from torch.autograd import Variable
 
-    net = models.resnet18(pretrained = True)
+    net = models.resnet18(pretrained=True)
     finalconv_name = 'layer4'
     net.fc = nn.Linear(net.fc.in_features, n_outputs)
     net.load_state_dict(torch.load(weights_path)["model_state_dict"])
@@ -231,7 +234,12 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
         bz, nc, h, w = feature_conv.shape
         output_cam = []
         for idx in class_idx:
-            cam = weight_softmax[idx].dot(feature_conv.reshape((nc, h * w)))
+            print(idx)
+            print(weight_softmax[idx])
+            if idx.size == 1:  # otherwise is not array
+                cam = np.array(weight_softmax[idx]).dot(feature_conv.reshape((nc, h * w)))
+            else:
+                cam = weight_softmax[idx].dot(feature_conv.reshape((nc, h * w)))
             cam = cam.reshape(h, w)
             cam = cam - np.min(cam)
             cam_img = cam / np.max(cam)
@@ -239,7 +247,7 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
             output_cam.append(cv2.resize(cam_img, size_upsample))
         return output_cam
 
-    normalize = transforms.Normalize(mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225])
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     preprocess = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor(), normalize])
 
     img_pil = Image.open(image_path)
@@ -250,12 +258,12 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
     img_variable = img_variable.to(torch.device(device))
     logit = net(img_variable)
     logit = logit.cpu()
-    h_x = F.softmax(logit, dim = 1).data.squeeze()
+    h_x = F.softmax(logit, dim=1).data.squeeze()
     probs, idx = h_x.sort(0, True)
     probs = probs.numpy()
     idx = idx.numpy()
-    print( probs, type(idx))
-    if len(idx) == 1:  # otherwise is not array
+    print(probs, type(idx))
+    if idx.size == 1:  # otherwise is not array
         idx = np.array([0])
 
     # generate class activation mapping for the top1 prediction
