@@ -63,7 +63,6 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
     allowed_extensions = ["jpg", "png", "tif"]  # list of considered image file extensions
     if isinstance(names, list):  # multiple dirs
         if os.path.isdir(names[0]):
-            print("ASDASF")
             im_dirs = names.copy()
             names = list()
             for im_dir in im_dirs:
@@ -251,11 +250,12 @@ def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
     img_variable = img_variable.to(torch.device(device))
     logit = net(img_variable)
     logit = logit.cpu()
-
     h_x = F.softmax(logit, dim = 1).data.squeeze()
     probs, idx = h_x.sort(0, True)
     probs = probs.numpy()
     idx = idx.numpy()
+    if len(probs) == 1:  # otherwise is not array
+        idx = np.array([0])
 
     # generate class activation mapping for the top1 prediction
     CAMs = returnCAM(features_blobs[0], weight_softmax, [idx[0]])
