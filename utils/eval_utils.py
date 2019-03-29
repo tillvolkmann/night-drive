@@ -47,7 +47,7 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
     """
     Displays images in a grid-like arrangement.
 
-    :param names: list of image names or directories containing (currently only) images
+    :param names: list of image names or directories containing images
     :param max_num_img: 
     :param save_name: 
     :param fig_title: 
@@ -60,20 +60,24 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
     """
 
     # check whether dir is given
+    allowed_extensions = ["jpg", "png", "tif"]  # list of considered image file extensions
     if isinstance(names, list):  # multiple dirs
         if os.path.isdir(names[0]):
+            print("ASDASF")
             im_dirs = names.copy()
             names = list()
             for im_dir in im_dirs:
                 files = list(os.listdir(im_dir))
                 for file in files:
-                    names.append(os.path.join(im_dir, file))
+                    if os.path.splitext(file)[1] in allowed_extensions:  # only keep image files
+                        names.append(os.path.join(im_dir, file))
     elif os.path.isdir(names):  # single dir
         im_dir = names
         names = list()
         files = list(os.listdir(im_dir))
         for file in files:
-            names.append(os.path.join(im_dir, file))
+            if os.path.splitext(file)[1] in allowed_extensions:  # only keep image files
+                names.append(os.path.join(im_dir, file))
 
     # allows keeping only images that match pattern in filter
     names_filtered = list()
@@ -81,7 +85,7 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
         for name in names:
             if re.search(regex, name) is not None:
                 names_filtered.append(name)
-    names = names_filtered
+        names = names_filtered
 
     # get number of images
     n_img = len(names)
@@ -105,7 +109,6 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
     figw = ncol * 3 * (16 / 9)
     fig, ax = plt.subplots(nrow, ncol,
                            figsize=[figw, figh], gridspec_kw={'wspace': 0.03, 'hspace': 0.03}, squeeze=True)
-
     # Plot images
     c = 0
     for row in range(nrow):
@@ -153,6 +156,9 @@ def plot_imagegrid(names, max_num_img=64, save_name=None, fig_title=None, show_f
                 os.makedirs(path)
         plt.savefig(save_name+".jpg", format='jpg', dpi=90, bbox_inches='tight')
 
+    # return handles to figure and axes
+    # return fig, ax
+
 
 def get_filepath(root, fname_search, notfounderror=True):
     """
@@ -190,8 +196,10 @@ def get_filepaths(root, fnames_search, notfounderror=True):
     print(f"Found all files to be searched for in {root}.")
 
 
-# CAM code from https://github.com/metalbubble/CAM/blob/master/pytorch_CAM.py
 def get_CAM_resnet18(image_path, weights_path, class_dict, n_outputs, device):
+    """
+    CAM code from https://github.com/metalbubble/CAM/blob/master/pytorch_CAM.py
+    """
     import cv2
     import torch
     import torch.nn as nn

@@ -42,7 +42,10 @@ if __name__ == "__main__":
 
     # Process frames:
     # Get list of all frames to process, i.e. those that contain "opt.suffix"
-    list_frames = [fn for fn in os.listdir(opt.path) if opt.suffix in fn]
+    if opt.suffix == "":
+        list_frames = [fn for fn in os.listdir(opt.path) if re.search(f"frame-{opt.suffix}[0-9]+", fn) is not None]  # actuallythis works for suffixes like empty (""), "transfer_AtoB-", etc, so the below option could be removed; and of course "opt.suffix" in the expression is redundant if the alternative conidtion is not removed
+    else:
+        list_frames = [fn for fn in os.listdir(opt.path) if opt.suffix in fn]
     if len(list_frames) == 0:
         raise Exception(f"No frames containing {opt.suffix} found in {opt.path}.")
 
@@ -66,7 +69,7 @@ if __name__ == "__main__":
         # write bgr (will be transformed to rgb by open cv)
         frame_out_name = os.path.basename(frame)
         frame_out_name, ext = os.path.splitext(frame_out_name)
-        frame_out_name = re.sub(r"([0-9]+)", r"{}\1".format('cam-'), frame_out_name) + ext
+        frame_out_name = re.sub(r"([0-9]+)", r"{}\1".format('cam-'), frame_out_name) + ext  # appends "cam" right before the frame counter
         cv2.imwrite(os.path.join(opt.path, frame_out_name),
                     cam_bgr,
                     [int(cv2.IMWRITE_JPEG_QUALITY), 95])
