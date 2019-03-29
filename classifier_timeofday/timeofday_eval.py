@@ -14,6 +14,8 @@ import torch.nn.functional as nnf
 import torchvision.models as models
 import torchvision.transforms as transforms
 import os, sys
+sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive/")
+sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive/datasets")
 sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive/night-drive/")
 sys.path.append("/home/SharedFolder/git/tillvolkmann/night-drive/night-drive/datasets")
 import datasets.bdd.BDDTimeOfDayDataset as bdd
@@ -24,8 +26,8 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"using {device}")
 
 # setting data set root dir
-root_dir = "/home/SharedFolder/CurrentDatasets/bdd100k/"
-which_split = "bddvalid"  # "bddvalid_converted"
+root_dir = "/home/SharedFolder/CurrentDatasets/bdd100k"
+which_split = "bddvalid_converted"  # "bddvalid_converted"
 results_json_file = os.path.join(root_dir, which_split+"-timeofday-results.json")
 which_ganmodel="v032_e14"
 batch_size = 32 # 128  # 256
@@ -40,7 +42,15 @@ transform = {
 }
 
 # create data sets
-dataset = bdd.BDDTimeOfDayDataset(root_dir, split=which_split, transform=transform["test"], with_labels=True, output_filenames=True, which_ganmodel=which_ganmodel)
+dataset = bdd.BDDTimeOfDayDataset(
+    root_dir,
+    split=which_split,
+    transform=transform["test"],
+    with_labels=True,
+    dropcls=['dawn/dusk', 'undefined'],
+    output_filenames=True,
+    which_ganmodel=which_ganmodel)
+
 
 # data loader
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
@@ -60,7 +70,7 @@ net.eval()
 
 with torch.no_grad():
     # initilaize results data frame
-    timeofday_predicted = pd.DataFrame(columns=["name", "label", "predicted_timeofday"])
+    timeofday_predicted = pd.DataFrame(columns=["name", "label", "prediction"])
     # Loop through data
     for i, data in enumerate(dataloader, 0):
         print(f"Processing batch {i + 1} of {(len(dataset) // batch_size) + 1}...")
@@ -71,8 +81,8 @@ with torch.no_grad():
         # pd.DataFrame({"name": list(filenames), "predicted_timeofday": list(outputs.detach().cpu().numpy().squeeze())})
         timeofday_predicted = pd.concat([timeofday_predicted, pd.DataFrame({
             "name": list(filenames),
-            "label": list(labels),
-            "prediction": list(outputs.detach().cpu().numpy().squeeze())})], ignore_index=True)
+            "label": labels.detach().cpu().numpy().squeeze(),
+            "prediction": list(outputs.detach().cpu().numpy().squeeze())})], sort=True, ignore_index=True)
     # Write results to json file
     timeofday_predicted = timeofday_predicted.reset_index(drop=True)
     timeofday_predicted.to_json(results_json_file)
