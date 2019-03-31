@@ -144,11 +144,11 @@ def plot_confusion_matrix(y_true, y_pred, classes, normalize = False, title = No
         print("Confusion matrix, without normalization")
     print(cm)
     fig, ax = plt.subplots(figsize = (10, 10))
-    plt.rcParams.update({"font.size": 12})
+    plt.rcParams.update({"font.size": 22})
     for label in (ax.get_xticklabels() + ax.get_yticklabels()):
-        label.set_fontsize(12)
-    ax.xaxis.label.set_size(12)
-    ax.yaxis.label.set_size(12)
+        label.set_fontsize(18)
+    ax.xaxis.label.set_size(18)
+    ax.yaxis.label.set_size(18)
     im = ax.imshow(cm, interpolation = "nearest", cmap = cmap)
     ax.figure.colorbar(im, ax = ax)
     # We want to show all ticks...
