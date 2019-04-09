@@ -5,7 +5,7 @@ Visual perception models within driver-assistance systems or autonomous driving 
 
 Usually, the quality in performing these tasks should stay the same, regardless of the lighting situation, e. g. day-time vs. night-time, the current weather conditions or the region the data has been recorded. To achieve this, a properly balanced data set across all possible situations and conditions is crucial. However, since data acquisition and labeling is costly regarding time and money, many real world projects end up using somewhat unbalanced data sets that then are used to train slightly biased models.
 
-### The Project ####
+### The Project ###
 As our portfolio project for DSR Batch #17, we want to analyze the benefits of a possible solution to the problem described above by choosing one particular use-case. Assuming, that we have a data set containing less night-time images than day-time images, we want to train a Generative Adversarial Network to generate more night-time images from existing day-time images. This task is also known as domain transfer.
 If we succeed, we would get the labels within the night-time images for free, since they originated from daytime-images where the labels are known and the spatial construction of the scene within the generated images should stay the same.
 
